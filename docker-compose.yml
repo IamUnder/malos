@@ -1,0 +1,29 @@
+# Despliegue de malos.es en el servidor (patrón PortLedger: checkout del repo + compose + Cloudflare Tunnel).
+# Ver DEPLOY.md.
+#
+#   docker compose up -d --build     # publicar versión
+
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - data:/app/data
+    mem_limit: 192m
+    networks:
+      tunnel:
+        # Nombre con el que cloudflared encuentra este servicio: http://<WEB_ALIAS>:3000
+        aliases:
+          - ${WEB_ALIAS:?Define WEB_ALIAS en .env}
+    # Sin puertos publicados: el tráfico entra solo por el túnel de Cloudflare.
+
+volumes:
+  # SQLite con socios, jugadores, partidos y noticias. Va en las copias.
+  data:
+
+networks:
+  # Red propia del proyecto. PortLedger conecta el contenedor cloudflared desde fuera:
+  #   docker network connect <TUNNEL_NETWORK> <contenedor-del-túnel>
+  tunnel:
+    name: ${TUNNEL_NETWORK:?Define TUNNEL_NETWORK en .env}

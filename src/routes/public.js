@@ -1,0 +1,193 @@
+import { Hono } from 'hono';
+import { config } from '../config.js';
+import * as data from '../data.js';
+import { sendAccessLink } from '../lib/mail.js';
+import { tooMany, turnstileOk } from '../lib/guard.js';
+import { memberCheckCode, memberCheckPath, safeEqual } from '../lib/auth.js';
+import * as views from '../views/public.js';
+import { privacy, legalNotice } from '../views/legal.js';
+
+export const publicRoutes = new Hono();
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Sin SMTP, en desarrollo y en pruebas se enseña el enlace en pantalla. Nunca en producción: cualquiera podría
+// apuntarse con un email ajeno.
+const devLinkFor = (member) => (!config.mail.enabled && (!config.isProd || config.testMode) ? `/socio/${member.access_token}` : null);
+
+const FLASH = {
+  favorito: { kind: 'ok', message: 'Favorito guardado. ¡Que se note en el ranking!' },
+  bloqueado: { kind: 'error', message: 'Todavía no puedes cambiar de favorito.' },
+};
+
+publicRoutes.get('/', (c) => c.html(views.homePage({
+  stats: data.stats(),
+  match: data.nextMatch(),
+  rank: data.ranking(),
+  players: data.listPlayers(),
+  posts: data.listPosts(3),
+  upcoming: data.upcomingMatches(4),
+})));
+
+publicRoutes.get('/plantilla', (c) => c.html(views.rosterPage({ players: data.listPlayers() })));
+publicRoutes.get('/ranking', (c) => c.html(views.rankingPage({ rank: data.ranking() })));
+publicRoutes.get('/partidos', (c) => c.html(views.matchesPage({ upcoming: data.upcomingMatches(20), results: data.recentResults(20) })));
+publicRoutes.get('/noticias', (c) => c.html(views.newsPage({ posts: data.listPosts(50) })));
+publicRoutes.get('/privacidad', (c) => c.html(views.legalPage({ title: 'Privacidad', path: '/privacidad', content: privacy })));
+publicRoutes.get('/aviso-legal', (c) => c.html(views.legalPage({ title: 'Aviso legal', path: '/aviso-legal', content: legalNotice })));
+
+// ---------- Alta ----------
+
+publicRoutes.get('/hazte-socio', (c) => c.html(views.joinPage({ players: data.listPlayers() })));
+
+publicRoutes.post('/hazte-socio', async (c) => {
+  const form = await c.req.parseBody();
+  const values = {
+    nick: String(form.nick || '').trim().replace(/\s+/g, ' ').slice(0, 24),
+    email: String(form.email || '').trim().slice(0, 120),
+    favorite: form.favorite,
+    age: form.age,
+    privacy: form.privacy,
+  };
+  const players = data.listPlayers();
+  const fail = (error, status = 400) => c.html(views.joinPage({ players, values, error }), status);
+
+  if (form.website) return c.redirect('/'); // bot que rellena el campo trampa
+  if (tooMany(c, 'join', 8, 3600e3)) return fail('Demasiados intentos desde esta conexión. Prueba dentro de un rato.', 429);
+  if (values.nick.length < 2) return fail('El nick tiene que tener al menos 2 caracteres.');
+  if (!EMAIL_RE.test(values.email)) return fail('Ese email no parece válido. Revísalo.');
+  if (!values.age) return fail(`Tienes que tener ${config.minAge} años o más para hacerte socio.`);
+  if (!values.privacy) return fail('Tienes que aceptar la política de privacidad.');
+  const favorite = values.favorite ? data.getPlayer(Number(values.favorite)) : null;
+  if (values.favorite && !favorite?.active) return fail('Ese jugador no está en la plantilla. Elige otro.');
+  if (players.length && !favorite) return fail('Elige a tu jugador favorito.');
+  if (!(await turnstileOk(c, form['cf-turnstile-response']))) return fail('No hemos podido comprobar que no eres un bot. Vuelve a intentarlo.');
+
+  const { member } = data.createMember({ nick: values.nick, email: values.email, favoritePlayerId: favorite?.id });
+  // Mismo mensaje exista o no el email: así no se puede averiguar quién es socio.
+  await sendAccessLink(member).catch((err) => console.error('[mail]', err.message));
+  return c.html(views.checkEmailPage({ email: values.email, devLink: devLinkFor(member) }));
+});
+
+// ---------- Recuperar el enlace ----------
+
+publicRoutes.get('/mi-tarjeta', (c) => c.html(views.recoverPage({})));
+
+publicRoutes.post('/mi-tarjeta', async (c) => {
+  const { email } = await c.req.parseBody();
+  if (tooMany(c, 'recover', 5, 3600e3)) return c.html(views.recoverPage({ error: 'Demasiados intentos. Prueba dentro de un rato.' }), 429);
+  const member = data.memberByEmail(email);
+  if (member) await sendAccessLink(member).catch((err) => console.error('[mail]', err.message));
+  return c.html(views.recoverPage({ sent: true, devLink: member ? devLinkFor(member) : null }));
+});
+
+// ---------- Carné ----------
+
+function loadMember(c) {
+  const member = data.memberByToken(c.req.param('token'));
+  return member || null;
+}
+
+publicRoutes.get('/socio/:token', (c) => {
+  let member = loadMember(c);
+  if (!member) return c.notFound();
+  const justVerified = !member.verified_at;
+  member = data.verifyMember(member);
+
+  const favorite = member.favorite_player_id ? data.getPlayer(member.favorite_player_id) : null;
+  // Si su favorito ya no está en la plantilla, puede elegir otro sin esperar.
+  const lockedUntil = favorite?.active ? data.favoriteLockedUntil(member) : null;
+  c.header('Cache-Control', 'no-store');
+  c.header('Referrer-Policy', 'no-referrer');
+  return c.html(views.cardPage({
+    member,
+    favorite,
+    players: data.listPlayers(),
+    lockedUntil,
+    pushCount: data.countSubscriptions(member.id),
+    justVerified,
+    flash: FLASH[c.req.query('ok')] || FLASH[c.req.query('error')],
+    checkPath: memberCheckPath(member),
+  }));
+});
+
+publicRoutes.post('/socio/:token/favorito', async (c) => {
+  const member = loadMember(c);
+  if (!member?.verified_at) return c.notFound();
+  const { favorite } = await c.req.parseBody();
+  const player = data.getPlayer(Number(favorite));
+  const current = member.favorite_player_id ? data.getPlayer(member.favorite_player_id) : null;
+  const back = `/socio/${member.access_token}`;
+  if (!player?.active) return c.redirect(back);
+  if (current?.active && data.favoriteLockedUntil(member)) return c.redirect(`${back}?error=bloqueado`);
+  if (player.id !== member.favorite_player_id) data.changeFavorite(member, player.id);
+  return c.redirect(`${back}?ok=favorito`);
+});
+
+publicRoutes.post('/socio/:token/baja', async (c) => {
+  const member = loadMember(c);
+  if (!member) return c.notFound();
+  const { confirm } = await c.req.parseBody();
+  if (!confirm) return c.redirect(`/socio/${member.access_token}`);
+  data.deleteMember(member.id);
+  return c.html(views.goodbyePage());
+});
+
+// Comprobación pública de carné: /s/<número>-<código>
+publicRoutes.get('/s/:code', (c) => {
+  const [num, code] = c.req.param('code').split('-');
+  const number = Number(num);
+  const member = number && code && safeEqual(code, memberCheckCode(number)) ? data.memberByNumber(number) : null;
+  c.header('X-Robots-Tag', 'noindex');
+  return c.html(views.checkPage({ member }), member ? 200 : 404);
+});
+
+// ---------- Avisos push ----------
+
+publicRoutes.post('/api/push/subscribe', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = data.memberByToken(String(body.token || ''));
+  const sub = body.subscription;
+  if (!member?.verified_at) return c.json({ error: 'Socio no encontrado' }, 404);
+  if (!sub?.endpoint?.startsWith('https://') || !sub.keys?.p256dh || !sub.keys?.auth) return c.json({ error: 'Suscripción no válida' }, 400);
+  if (data.countSubscriptions(member.id) >= 10) return c.json({ error: 'Demasiados dispositivos' }, 429);
+  data.saveSubscription(member.id, sub);
+  return c.json({ ok: true });
+});
+
+publicRoutes.post('/api/push/unsubscribe', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const member = data.memberByToken(String(body.token || ''));
+  if (member && body.endpoint) data.deleteSubscription(String(body.endpoint));
+  return c.json({ ok: true });
+});
+
+// ---------- PWA ----------
+
+publicRoutes.get('/manifest.webmanifest', (c) => {
+  // En la página del carné, el manifiesto apunta al carné del socio: así, al añadir la web a la
+  // pantalla de inicio (necesario para los avisos en iPhone), la app se abre directamente en su carné.
+  const t = c.req.query('t');
+  const member = t ? data.memberByToken(t) : null;
+  c.header('Content-Type', 'application/manifest+json');
+  return c.body(JSON.stringify({
+    name: 'Malos',
+    short_name: 'Malos',
+    description: 'Club de socios de Malos',
+    lang: 'es',
+    start_url: member ? `/socio/${member.access_token}` : '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#e3b93c',
+    theme_color: '#14120c',
+    icons: [
+      { src: '/img/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/img/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/img/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  }));
+});
+
+publicRoutes.get('/api/health', (c) => {
+  data.stats();
+  return c.json({ status: 'ok' });
+});

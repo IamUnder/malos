@@ -1,0 +1,277 @@
+/* Malos — identidad sacada del escudo: mostaza, tinta y blanco, con el azul y el rojo de la "L" de prácticas. */
+
+@font-face { font-family: 'Big Shoulders'; src: url('/fonts/big-shoulders.woff2') format('woff2'); font-weight: 700 900; font-display: swap; }
+@font-face { font-family: 'Onest'; src: url('/fonts/onest.woff2') format('woff2'); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('/fonts/jetbrains-mono.woff2') format('woff2'); font-weight: 500 700; font-display: swap; }
+
+:root {
+  --mostaza: #e3b93c;
+  --mostaza-hondo: #c99a1e;
+  --tinta: #14120c;
+  --tinta-2: #2a2517;
+  --hueso: #fff8e7;
+  --papel: #fffdf6;
+  --gris: #6d6450;
+  --linea: #e6dcc0;
+  --azul-l: #1d4fb8;
+  --rojo-l: #d62828;
+  --ok: #2f7d32;
+
+  --display: 'Big Shoulders', 'Arial Narrow', Impact, sans-serif;
+  --body: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  --radius: 6px;
+  --wrap: 1120px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font: 400 1rem/1.6 var(--body);
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--azul-l); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 900; line-height: .92; letter-spacing: .01em; text-transform: uppercase; text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(2.2rem, 5vw, 3.4rem); }
+h3 { font-size: 1.6rem; }
+p { margin: 0; }
+.wrap { width: min(100% - 32px, var(--wrap)); margin-inline: auto; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font: 700 .75rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gris); }
+.muted { color: var(--gris); }
+.stack { display: grid; gap: 16px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- Cabecera ---------- */
+.testbar { margin: 0; padding: 6px 16px; background: var(--rojo-l); color: #fff; font: 700 .78rem/1.3 var(--mono); text-align: center; letter-spacing: .04em; }
+.top { background: var(--tinta); color: var(--hueso); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 60px; }
+.top .nav { min-width: 0; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 900 1.6rem/1 var(--display); letter-spacing: .04em; }
+.brand img { height: 38px; width: auto; }
+.nav { display: flex; gap: 4px 18px; flex-wrap: wrap; font-weight: 600; font-size: .95rem; }
+.nav a { text-decoration: none; opacity: .85; }
+.nav a:hover, .nav a[aria-current] { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+.nav form { display: contents; }
+.nav-exit { background: none; border: 0; padding: 0; color: var(--mostaza); font: inherit; cursor: pointer; }
+
+/* ---------- Botones ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 14px 24px; border: 3px solid var(--tinta); border-radius: var(--radius);
+  background: var(--tinta); color: var(--mostaza);
+  font: 900 1.25rem/1 var(--display); letter-spacing: .06em; text-transform: uppercase; text-decoration: none;
+  cursor: pointer; box-shadow: 4px 4px 0 var(--tinta-2);
+  transition: transform .12s, box-shadow .12s;
+}
+.btn:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--tinta-2); }
+.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--tinta-2); }
+.btn.ghost { background: transparent; color: var(--tinta); box-shadow: none; }
+.btn.small { padding: 9px 14px; font-size: 1rem; box-shadow: none; }
+.btn.danger { background: var(--rojo-l); border-color: var(--rojo-l); color: #fff; box-shadow: none; }
+.btn.blue { background: var(--azul-l); border-color: var(--azul-l); color: #fff; box-shadow: none; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* ---------- Portada ---------- */
+.hero { background: var(--mostaza); overflow: hidden; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, .6fr); align-items: center; gap: 32px; padding-block: 56px 64px; }
+.hero h1 { font-size: clamp(3rem, 8vw, 6.6rem); }
+.hero h1 .l-plate { font-size: .72em; vertical-align: .08em; }
+.hero .lead { font-size: 1.2rem; max-width: 34ch; margin-top: 18px; }
+.hero .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; margin-top: 28px; }
+.hero .counter { font: 700 .95rem/1.3 var(--mono); }
+.hero .counter b { display: block; font-size: 2rem; }
+.hero .crest { justify-self: center; width: min(300px, 70%); filter: drop-shadow(6px 8px 0 rgba(20, 18, 12, .18)); }
+
+/* La "L" de prácticas: el guiño del escudo, usado como sello de novato y detalle tipográfico. */
+.l-plate {
+  display: inline-grid; place-items: center; width: 1.05em; height: 1.2em;
+  background: var(--azul-l); color: #fff; border: .06em solid #fff; border-radius: .08em;
+  font-family: var(--body); font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 .03em var(--tinta);
+}
+
+/* ---------- Franja del próximo partido ---------- */
+.matchbar { background: var(--tinta); color: var(--hueso); }
+.matchbar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding-block: 18px; }
+.matchbar .vs { font: 900 clamp(1.6rem, 4vw, 2.3rem)/1 var(--display); text-transform: uppercase; }
+.matchbar .vs span { color: var(--mostaza); }
+.matchbar .when { font-family: var(--mono); font-size: .95rem; }
+.matchbar .btn { margin-left: auto; background: var(--mostaza); color: var(--tinta); border-color: var(--mostaza); box-shadow: none; font-size: 1.05rem; padding: 10px 16px; }
+.live { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 3px; background: var(--rojo-l); color: #fff; font: 700 .72rem/1 var(--mono); letter-spacing: .12em; }
+.live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+
+/* ---------- Secciones ---------- */
+.section { padding-block: 64px; }
+.section + .section { border-top: 1px solid var(--linea); }
+.section-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 28px; }
+.section-head p { max-width: 52ch; }
+
+/* ---------- Clasificación de fans ---------- */
+.standings { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: pos; }
+.standings li {
+  display: grid; grid-template-columns: 3ch minmax(0, 1fr) auto; align-items: center; gap: 4px 16px;
+  padding: 14px 18px; background: var(--hueso); border: 2px solid var(--tinta); border-radius: var(--radius);
+}
+.standings li:first-child { background: var(--mostaza); }
+.standings .pos { font: 900 2rem/1 var(--display); }
+.standings .who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.standings .who-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; }
+.standings .nick { font: 900 1.7rem/1 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
+.standings .role { font: 700 .72rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--gris); }
+.standings li:first-child .role { color: var(--tinta-2); }
+.standings .fans { font: 700 1.1rem/1 var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.standings .fans small { display: block; font-size: .7rem; font-weight: 500; color: var(--gris); margin-top: 3px; }
+.standings .bar { grid-column: 2 / -1; height: 8px; background: rgba(20, 18, 12, .1); border-radius: 4px; overflow: hidden; }
+.standings .bar i { display: block; height: 100%; background: var(--tinta); border-radius: 4px; }
+
+.avatar { flex: none; border-radius: var(--radius); border: 2px solid var(--tinta); background: var(--tinta); object-fit: cover; }
+.avatar-empty { display: grid; place-items: center; color: var(--mostaza); font: 900 1.4rem/1 var(--display); text-transform: uppercase; }
+.champs { display: flex; flex-wrap: wrap; gap: 6px; }
+.champs img { border-radius: 50%; border: 2px solid var(--tinta); }
+.champ-text { font: 700 .7rem/1 var(--mono); padding: 4px 6px; border: 1px solid var(--linea); border-radius: 3px; }
+
+/* ---------- Plantilla ---------- */
+.roster { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+.roster li { display: grid; justify-items: start; align-content: start; gap: 6px; padding: 18px; background: var(--hueso); border: 2px solid var(--tinta); border-radius: var(--radius); }
+.roster .avatar { width: 96px; height: 96px; box-shadow: 4px 4px 0 var(--mostaza-hondo); margin-bottom: 8px; }
+.roster .role { font: 700 .72rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gris); }
+.roster h3 { font-size: 1.9rem; overflow-wrap: anywhere; }
+.roster .realname { color: var(--gris); margin-bottom: 6px; }
+.empty { padding: 28px; border: 2px dashed var(--linea); border-radius: var(--radius); text-align: center; color: var(--gris); }
+
+/* ---------- Noticias y partidos ---------- */
+.cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 48px; }
+.news { display: grid; gap: 28px; }
+.news article { display: grid; gap: 8px; }
+.news h3 { font-size: 1.9rem; }
+.news .body { white-space: pre-line; max-width: 65ch; }
+.fixtures { list-style: none; margin: 0; padding: 0; display: grid; }
+.fixtures li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--linea); }
+.fixtures .date { font: 700 .8rem/1.2 var(--mono); text-align: center; min-width: 4.5ch; text-transform: uppercase; }
+.fixtures .date b { display: block; font-size: 1.4rem; }
+.fixtures .opp { font: 900 1.4rem/1 var(--display); text-transform: uppercase; }
+.fixtures .comp { font-size: .85rem; color: var(--gris); }
+.fixtures .res { font: 700 1.1rem/1 var(--mono); }
+
+/* ---------- Donaciones ---------- */
+.support { background: var(--azul-l); color: #fff; }
+.support .wrap { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 24px 36px; padding-block: 44px; }
+.support .l-plate { font-size: 4.5rem; background: #fff; color: var(--azul-l); border-color: var(--azul-l); box-shadow: 0 0 0 4px #fff; }
+.support h2 { font-size: clamp(1.9rem, 4vw, 2.6rem); }
+.support p { opacity: .92; max-width: 60ch; margin-top: 8px; }
+.support .costs { font: 500 .85rem/1.5 var(--mono); opacity: .85; margin-top: 10px; }
+.support .btn { background: #fff; color: var(--azul-l); border-color: #fff; box-shadow: 4px 4px 0 var(--tinta); }
+
+/* ---------- Formularios ---------- */
+.panel { background: var(--hueso); border: 2px solid var(--tinta); border-radius: var(--radius); padding: clamp(20px, 4vw, 36px); }
+.form { display: grid; gap: 18px; }
+.field { display: grid; gap: 6px; }
+.field label, .field legend { font-weight: 700; }
+.field .hint { font-size: .85rem; color: var(--gris); }
+input[type=text], input[type=email], input[type=password], input[type=number], input[type=url], input[type=datetime-local], select, textarea {
+  width: 100%; padding: 12px 14px; border: 2px solid var(--tinta); border-radius: var(--radius);
+  background: #fff; color: var(--tinta); font: inherit;
+}
+textarea { min-height: 140px; resize: vertical; }
+.check { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; font-size: .95rem; }
+.check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--tinta); }
+fieldset { border: 0; padding: 0; margin: 0; }
+
+.picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.picker label { position: relative; cursor: pointer; }
+.picker input { position: absolute; opacity: 0; }
+.picker span {
+  display: grid; justify-items: start; gap: 4px; padding: 14px; height: 100%;
+  border: 2px solid var(--tinta); border-radius: var(--radius); background: #fff;
+}
+.picker .avatar { margin-bottom: 6px; }
+.picker b { font: 900 1.4rem/1 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
+.picker small { font: 700 .7rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gris); }
+.picker input:checked + span { background: var(--mostaza); box-shadow: 3px 3px 0 var(--tinta); }
+.picker input:focus-visible + span { outline: 3px solid var(--azul-l); outline-offset: 2px; }
+
+.alert { padding: 14px 18px; border-radius: var(--radius); border: 2px solid currentColor; font-weight: 600; }
+.alert.ok { color: var(--ok); background: #eef7ee; }
+.alert.error { color: var(--rojo-l); background: #fdeeee; }
+.alert.info { color: var(--azul-l); background: #eef2fb; }
+
+.narrow { width: min(100% - 32px, 640px); margin-inline: auto; padding-block: 48px 72px; display: grid; gap: 24px; }
+
+/* ---------- Carné de socio ---------- */
+.carnet {
+  position: relative; overflow: hidden; aspect-ratio: 1.586; width: 100%; max-width: 460px; margin-inline: auto;
+  padding: 22px 24px; border-radius: 16px; background: var(--mostaza); color: var(--tinta);
+  box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 18px 40px -18px rgba(20, 18, 12, .55), 6px 6px 0 var(--tinta);
+  display: grid; grid-template-rows: auto 1fr auto; container-type: inline-size;
+}
+.carnet::after {
+  /* Escudo de fondo, como una marca de agua */
+  content: ''; position: absolute; right: -8%; top: 8%; width: 55%; aspect-ratio: .55;
+  background: url('/img/crest.png') center / contain no-repeat; opacity: .35; pointer-events: none;
+}
+.carnet > * { position: relative; z-index: 1; }
+.carnet .row { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.carnet .club { font: 900 clamp(1.3rem, 7cqi, 1.9rem)/1 var(--display); letter-spacing: .06em; }
+.carnet .num { font: 700 clamp(2.2rem, 13cqi, 3.6rem)/1 var(--mono); letter-spacing: -.02em; align-self: center; }
+.carnet .num small { display: block; font-size: .7rem; letter-spacing: .14em; font-weight: 700; color: var(--tinta-2); margin-bottom: 4px; }
+.carnet dl { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 2px 22px; margin: 0; }
+.carnet dt { font: 700 .62rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--tinta-2); }
+.carnet dd { margin: 0; font: 800 clamp(.95rem, 4.4cqi, 1.2rem)/1.15 var(--display); text-transform: uppercase; grid-row: 2; overflow-wrap: anywhere; }
+.carnet .rookie { font-size: 1.7rem; }
+.carnet.pending { background: repeating-linear-gradient(-45deg, var(--hueso) 0 14px, #f3e7c6 14px 28px); }
+
+/* ---------- Pie ---------- */
+.foot { background: var(--tinta); color: var(--hueso); padding-block: 36px; font-size: .9rem; }
+.foot .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 32px; }
+.foot nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.foot a { opacity: .8; }
+
+/* ---------- Texto legal ---------- */
+.prose { max-width: 70ch; display: grid; gap: 14px; }
+.prose h2 { font-size: 2rem; margin-top: 18px; }
+
+/* ---------- Admin ---------- */
+.admin-top .brand::after { content: 'ADMIN'; margin-left: 6px; padding: 3px 6px; border-radius: 3px; background: var(--mostaza); color: var(--tinta); font: 700 .7rem/1 var(--mono); letter-spacing: .1em; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { padding: 16px 18px; border: 2px solid var(--tinta); border-radius: var(--radius); background: var(--hueso); }
+.tile b { display: block; font: 700 2rem/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.tile span { font-size: .85rem; color: var(--gris); }
+.table-wrap { overflow-x: auto; border: 2px solid var(--tinta); border-radius: var(--radius); }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; background: #fff; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--linea); vertical-align: middle; }
+th { background: var(--hueso); font: 700 .72rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pill { display: inline-block; padding: 3px 8px; border-radius: 99px; font: 700 .7rem/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase; background: var(--linea); }
+.pill.ok { background: #d9eeda; color: var(--ok); }
+.pill.warn { background: #fbe6c2; color: #8a5a00; }
+
+/* ---------- Móvil ---------- */
+@media (max-width: 800px) {
+  .hero .wrap { grid-template-columns: 1fr; padding-block: 36px 44px; }
+  .hero .crest { grid-row: 1; width: 150px; justify-self: start; }
+  .cols { grid-template-columns: 1fr; }
+  .support .wrap { grid-template-columns: 1fr; }
+  .support .l-plate { font-size: 3rem; }
+  .matchbar .btn { margin-left: 0; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .top .wrap { gap: 12px; }
+  .nav { flex-wrap: nowrap; overflow-x: auto; gap: 14px; font-size: .88rem; padding-block: 8px; scrollbar-width: none; }
+  .nav a { white-space: nowrap; }
+  .brand span { display: none; }
+  .standings li { padding: 12px 14px; gap: 4px 10px; }
+  .standings .nick { font-size: 1.4rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

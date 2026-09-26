@@ -1,0 +1,23 @@
+{
+  "name": "malos-socios",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web de socios de Malos: número de socio, tarjeta de Apple Wallet con avisos y ranking de jugadores favoritos.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch --env-file-if-exists=.env src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\"",
+    "seed:demo": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/seed-demo.js",
+    "champions": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/fetch-champions.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.9",
+    "nodemailer": "^10.0.10",
+    "web-push": "^3.6.7"
+  }
+}
