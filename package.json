@@ -2,7 +2,7 @@
   "name": "malos-socios",
   "version": "0.1.0",
   "private": true,
-  "description": "Web de socios de Malos: número de socio, tarjeta de Apple Wallet con avisos y ranking de jugadores favoritos.",
+  "description": "Web de socios de Malos: número de socio, carné digital con avisos push y ranking de jugadores favoritos.",
   "type": "module",
   "engines": {
     "node": ">=24"

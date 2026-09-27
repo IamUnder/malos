@@ -151,7 +151,7 @@ export function checkEmailPage({ email, devLink }) {
       <h2>Mira tu email</h2>
       <p>Si <b>${email}</b> es correcto, te acabamos de mandar un enlace. Ábrelo para confirmar y recibir tu número de socio.</p>
       <p class="muted">¿No llega? Mira en spam o promociones. El enlace no caduca.</p>
-      ${devLink ? html`<p class="alert info">Entorno de pruebas (sin email configurado): <a href="${devLink}">abrir el enlace</a></p>` : ''}
+      ${devLink ? html`<p class="alert info">Entorno de pruebas (el email no está configurado o ha fallado): <a href="${devLink}">abrir el enlace</a></p>` : ''}
     </div>`,
   });
 }
@@ -167,7 +167,7 @@ export function recoverPage({ sent, error, devLink }) {
       </div>
       ${sent ? alert('ok', 'Si ese email es de un socio, le acabamos de mandar su enlace.') : ''}
       ${alert('error', error)}
-      ${devLink ? html`<p class="alert info">Entorno de pruebas (sin email configurado): <a href="${devLink}">abrir el enlace</a></p>` : ''}
+      ${devLink ? html`<p class="alert info">Entorno de pruebas (el email no está configurado o ha fallado): <a href="${devLink}">abrir el enlace</a></p>` : ''}
       <form class="panel form" method="post" action="/mi-tarjeta">
         <div class="field">
           <label for="email">Email con el que te apuntaste</label>

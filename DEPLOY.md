@@ -6,8 +6,17 @@ Guía para quien despliega (Jorge o la sesión de PortLedger). Sigue el mismo pa
 
 | Entorno | Carpeta | Hostname | `COMPOSE_PROJECT_NAME` = `WEB_ALIAS` | `TUNNEL_NETWORK` | `TEST_MODE` |
 |---|---|---|---|---|---|
-| Pruebas | `/home/under/malos-web-test` | `test.kaizogroup.es` | `malos-web-test` | `malos-web-test-net` | `true` |
-| Producción | `/home/under/malos-web` | `malos.es` | `malos-web` | `malos-web-net` | `false` |
+| Pruebas (actual) | `/home/under/malos-web-test` | `malos.es` y `test.kaizogroup.es` | `malos-web-test` | `malos-web-test-net` | `true` |
+| Producción (en el lanzamiento) | `/home/under/malos-web` | `malos.es` | `malos-web` | `malos-web-net` | `false` |
+
+De momento `malos.es` apunta al entorno de pruebas (con `SITE_URL=https://malos.es` y `TEST_MODE=true`), hasta la presentación oficial.
+El túnel que sirve estos dominios es `kaizenfit-tunnel`; `kaizogroup-tunnel` no se usa.
+
+**Lanzamiento:** basta con poner `TEST_MODE=false` y recrear el contenedor. Antes, borra los socios de prueba y reinicia la numeración (jugadores, partidos y noticias se conservan):
+```bash
+docker compose exec web node scripts/reset-members.js            # dice cuántos borraría
+docker compose exec web node scripts/reset-members.js --confirmo  # los borra; el siguiente socio es el #0001
+```
 
 Con `TEST_MODE=true` la web no se indexa, enseña una franja roja de "entorno de pruebas" y, mientras no haya SMTP, muestra el enlace de confirmación en pantalla. Así se puede probar el alta sin email. **Nunca en producción.**
 Pruebas y producción tienen que usar **claves VAPID y `SESSION_SECRET` distintos**.
@@ -48,7 +57,7 @@ La plantilla inicial (los 5 de LoL, en `src/roster.js`) se carga sola la primera
    SMTP_PASS=...
    MAIL_FROM=Malos <socios@malos.es>
 
-   TEST_MODE=false      # true en test.kaizogroup.es
+   TEST_MODE=false      # true mientras sea el entorno de pruebas
    KOFI_URL=https://ko-fi.com/<usuario>
    REPO_URL=https://github.com/<usuario>/malos
    LEGAL_OWNER=<nombre del responsable>

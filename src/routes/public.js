@@ -12,7 +12,12 @@ export const publicRoutes = new Hono();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // Sin SMTP, en desarrollo y en pruebas se enseña el enlace en pantalla. Nunca en producción: cualquiera podría
 // apuntarse con un email ajeno.
-const devLinkFor = (member) => (!config.mail.enabled && (!config.isProd || config.testMode) ? `/socio/${member.access_token}` : null);
+// También si el envío falla (p. ej. dominio aún sin verificar en el proveedor de email).
+const devLinkFor = (member, sent) =>
+  ((!config.mail.enabled || !sent) && (!config.isProd || config.testMode) ? `/socio/${member.access_token}` : null);
+
+/** Envía el enlace y devuelve si salió bien. Un fallo de email no rompe el alta. */
+const trySend = (member) => sendAccessLink(member).then(() => true, (err) => { console.error('[mail]', err.message); return false; });
 
 const FLASH = {
   favorito: { kind: 'ok', message: 'Favorito guardado. ¡Que se note en el ranking!' },
@@ -64,8 +69,8 @@ publicRoutes.post('/hazte-socio', async (c) => {
 
   const { member } = data.createMember({ nick: values.nick, email: values.email, favoritePlayerId: favorite?.id });
   // Mismo mensaje exista o no el email: así no se puede averiguar quién es socio.
-  await sendAccessLink(member).catch((err) => console.error('[mail]', err.message));
-  return c.html(views.checkEmailPage({ email: values.email, devLink: devLinkFor(member) }));
+  const sent = await trySend(member);
+  return c.html(views.checkEmailPage({ email: values.email, devLink: devLinkFor(member, sent) }));
 });
 
 // ---------- Recuperar el enlace ----------
@@ -76,8 +81,8 @@ publicRoutes.post('/mi-tarjeta', async (c) => {
   const { email } = await c.req.parseBody();
   if (tooMany(c, 'recover', 5, 3600e3)) return c.html(views.recoverPage({ error: 'Demasiados intentos. Prueba dentro de un rato.' }), 429);
   const member = data.memberByEmail(email);
-  if (member) await sendAccessLink(member).catch((err) => console.error('[mail]', err.message));
-  return c.html(views.recoverPage({ sent: true, devLink: member ? devLinkFor(member) : null }));
+  const sent = member ? await trySend(member) : false;
+  return c.html(views.recoverPage({ sent: true, devLink: member ? devLinkFor(member, sent) : null }));
 });
 
 // ---------- Carné ----------
