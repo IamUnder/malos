@@ -79,3 +79,36 @@ test('las estadísticas de la temporada suman KDA y cuentan MVP/fraude confirmad
   assert.equal(m.fraud, 1);
   assert.equal(season[0].games > 0, true, 'primero los que han jugado');
 });
+
+test('marcadores posibles según el formato', () => {
+  assert.deepEqual(data.scoreOptions(1), ['1-0', '0-1']);
+  assert.deepEqual(data.scoreOptions(3), ['2-0', '2-1', '1-2', '0-2']);
+  assert.equal(data.scoreOptions(5).length, 6);
+});
+
+test('puntos de una predicción: MVP, fraude, exacto o solo ganador', () => {
+  const outcome = { mvp: new Set([1]), fraud: new Set([2, 3]), score: [2, 1] };
+  assert.equal(data.scorePrediction({ mvp_id: 1, fraud_id: 3, score: '2-1' }, outcome).points, 3 + 3 + 5);
+  assert.equal(data.scorePrediction({ mvp_id: 1, fraud_id: 4, score: '2-0' }, outcome).points, 3 + 2, 'ganador sin exacto');
+  assert.equal(data.scorePrediction({ mvp_id: 5, fraud_id: 4, score: '1-2' }, outcome).points, 0);
+  assert.equal(data.scorePrediction({ mvp_id: 1, fraud_id: 2, score: '' }, { ...outcome, score: null }).points, 6, 'sin marcador válido solo cuentan MVP y fraude');
+});
+
+test('El Oráculo: suma, desempata por exactos y respeta quien no quiere salir', () => {
+  const id = data.saveMatch({ startsAt: new Date(Date.now() + DAY), opponent: 'Oráculo', game: 'lol', bestOf: 3 });
+  const pre = data.getMatch(id);
+  const a = socio(10);
+  const b = socio(11);
+  const c = socio(12);
+  data.castVote({ match: pre, member: a, phase: 'pre', mvpId: top.id, fraudId: mid.id, score: '2-1' }); // 3+3+5
+  data.castVote({ match: pre, member: b, phase: 'pre', mvpId: top.id, fraudId: mid.id, score: '2-0' }); // 3+3+2
+  data.castVote({ match: pre, member: c, phase: 'pre', mvpId: mid.id, fraudId: top.id, score: '0-2' }); // 0
+  data.saveMatch({ id, startsAt: new Date(Date.now() - DAY), opponent: 'Oráculo', game: 'lol', bestOf: 3, result: '2-1' });
+  const post = data.getMatch(id);
+  data.castVote({ match: post, member: c, phase: 'post', mvpId: top.id, fraudId: mid.id });
+
+  const rows = data.oracleStandings().filter((r) => [a.id, b.id, c.id].includes(r.member_id));
+  assert.deepEqual(rows.map((r) => [r.nick, r.points, r.exact]), [['s10', 11, 1], ['s11', 8, 0], ['s12', 0, 0]]);
+  data.setOracleHidden(b.id, true);
+  assert.equal(data.oracleStandings().find((r) => r.member_id === b.id).hidden, true);
+});

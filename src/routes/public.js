@@ -24,6 +24,7 @@ const trySend = (member) => sendAccessLink(member).then(() => true, (err) => { c
 const FLASH = {
   favorito: { kind: 'ok', message: 'Favorito guardado. ¡Que se note en el ranking!' },
   bloqueado: { kind: 'error', message: 'Todavía no puedes cambiar de favorito.' },
+  oraculo: { kind: 'ok', message: 'Preferencia de El Oráculo guardada.' },
 };
 
 publicRoutes.get('/', (c) => {
@@ -36,6 +37,7 @@ publicRoutes.get('/', (c) => {
     posts: data.listPosts(3),
     upcoming: data.upcomingMatches(4),
     season: data.seasonStats('lol'),
+    oracle: data.oracleStandings().filter((r) => !r.hidden).slice(0, 5),
     last: played ? { match: played, stats: data.matchStats(played.id), postTally: data.voteTally(played.id, 'post') } : {},
   }));
 });
@@ -47,6 +49,7 @@ const VOTE_FLASH = {
   votado: { kind: 'ok', message: '¡Voto guardado! Puedes cambiarlo mientras la votación siga abierta.' },
   igual: { kind: 'error', message: 'El MVP y el fraude no pueden ser el mismo jugador.' },
   cerrada: { kind: 'error', message: 'Esta votación ya está cerrada.' },
+  resultado: { kind: 'error', message: 'Elige también el resultado del partido.' },
   socio: { kind: 'error', message: 'Para votar tienes que ser socio. Entra desde el enlace de tu email.' },
 };
 
@@ -54,12 +57,17 @@ publicRoutes.get('/partidos/:id{[0-9]+}', (c) => {
   const match = data.getMatch(Number(c.req.param('id')));
   if (!match) return c.notFound();
   const member = currentMember(c);
+  const myVotes = member ? data.memberVotes(match.id, member.id) : {};
+  const myResult = match.result && myVotes.pre
+    ? (() => { const o = data.matchOutcome(match); return { ...data.scorePrediction(myVotes.pre, o), final: o.final }; })()
+    : null;
   return c.html(matchView.matchPage({
     match,
+    myResult,
     phase: data.votePhase(match),
     candidates: data.voteCandidates(match),
     member,
-    myVotes: member ? data.memberVotes(match.id, member.id) : {},
+    myVotes,
     preTally: data.voteTally(match.id, 'pre'),
     postTally: data.voteTally(match.id, 'post'),
     stats: data.matchStats(match.id),
@@ -81,8 +89,20 @@ publicRoutes.post('/partidos/:id{[0-9]+}/votar', async (c) => {
   const fraudId = Number(form.fraud);
   if (!allowed.has(mvpId) || !allowed.has(fraudId)) return c.redirect(`/partidos/${match.id}`);
   if (mvpId === fraudId) return back('igual');
-  data.castVote({ match, member, phase, mvpId, fraudId });
+  const score = String(form.score || '');
+  if (phase === 'pre' && !data.scoreOptions(match.best_of).includes(score)) return back('resultado');
+  data.castVote({ match, member, phase, mvpId, fraudId, score });
   return back('votado');
+});
+
+publicRoutes.get('/oraculo', (c) => {
+  const all = data.oracleStandings();
+  const member = currentMember(c);
+  return c.html(views.oraclePage({
+    rows: all.filter((r) => !r.hidden || r.member_id === member?.id),
+    me: member ? all.find((r) => r.member_id === member.id) || null : null,
+    member,
+  }));
 });
 
 publicRoutes.get('/noticias', (c) => c.html(views.newsPage({ posts: data.listPosts(50) })));
@@ -168,6 +188,7 @@ publicRoutes.get('/socio/:token', (c) => {
     justVerified,
     flash: FLASH[c.req.query('ok')] || FLASH[c.req.query('error')],
     checkPath: memberCheckPath(member),
+    oracle: data.oracleStandings().find((r) => r.member_id === member.id) || null,
   }));
 });
 
@@ -182,6 +203,14 @@ publicRoutes.post('/socio/:token/favorito', async (c) => {
   if (current?.active && data.favoriteLockedUntil(member)) return c.redirect(`${back}?error=bloqueado`);
   if (player.id !== member.favorite_player_id) data.changeFavorite(member, player.id);
   return c.redirect(`${back}?ok=favorito`);
+});
+
+publicRoutes.post('/socio/:token/oraculo', async (c) => {
+  const member = loadMember(c);
+  if (!member?.verified_at) return c.notFound();
+  const { hidden } = await c.req.parseBody();
+  data.setOracleHidden(member.id, hidden === '1');
+  return c.redirect(`/socio/${member.access_token}?ok=oraculo#oraculo`);
 });
 
 publicRoutes.post('/socio/:token/baja', async (c) => {

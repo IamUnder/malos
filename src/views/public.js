@@ -1,11 +1,13 @@
 import { html, raw } from 'hono/html';
 import { config } from '../config.js';
 import { formatDate, pad } from '../lib/format.js';
+import { championIcon, parseChampions } from '../lib/champions.js';
+import { POINTS, VOTE_POST_DAYS } from '../data.js';
 import { layout } from './layout.js';
 import { lastMatchCard, seasonTable } from './match.js';
 import { alert, carnet, fixtures, matchbar, news, playerPicker, roster, standings, supportBlock } from './components.js';
 
-export function homePage({ stats, match, rank, players, posts, upcoming, season, last }) {
+export function homePage({ stats, match, rank, players, posts, upcoming, season, last, oracle }) {
   const body = html`
   <section class="hero">
     <div class="wrap">
@@ -35,6 +37,15 @@ export function homePage({ stats, match, rank, players, posts, upcoming, season,
       ${rank.length > 5 ? html`<p style="margin-top:16px"><a href="/ranking">Ver la clasificación completa</a></p>` : ''}
     </div>
   </section>
+  ${oracle.length ? html`<section class="section oracle-home">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="stack" style="gap:8px"><p class="eyebrow">La porra de los socios</p><h2>El Oráculo de Malos</h2></div>
+        <p class="muted">Acierta el MVP, el fraude y el resultado de cada partido. <a href="/oraculo">Clasificación completa</a></p>
+      </div>
+      ${oracleTable(oracle)}
+    </div>
+  </section>` : ''}
   ${season.some((r) => r.games > 0) ? html`<section class="section">
     <div class="wrap">
       <div class="section-head">
@@ -193,7 +204,7 @@ export function recoverPage({ sent, error, devLink }) {
   });
 }
 
-export function cardPage({ member, favorite, players, lockedUntil, pushCount, justVerified, flash, checkPath }) {
+export function cardPage({ member, favorite, players, lockedUntil, pushCount, justVerified, flash, checkPath, oracle }) {
   const verified = Boolean(member.verified_at);
   const body = html`<div class="narrow">
     ${justVerified ? alert('ok', `¡Dentro! Eres el socio número ${member.number}.`) : ''}
@@ -201,6 +212,14 @@ export function cardPage({ member, favorite, players, lockedUntil, pushCount, ju
     ${carnet(member, favorite)}
 
     ${verified ? html`
+    <div class="share-row" id="compartir"
+      data-number="${pad(member.number)}" data-nick="${member.nick}" data-favorite="${favorite?.nick ?? ''}"
+      data-champ="${favorite ? (championIcon(parseChampions(favorite.champions)[0] || '') || '') : ''}"
+      data-since="${formatDate(member.verified_at, { month: 'long', year: 'numeric' })}" data-site="${config.siteUrl.replace(/^https?:\/\//, '')}">
+      <button class="btn share-btn" type="button">Compartir mi carné</button>
+      <p class="muted share-hint">Genera una imagen para tus stories con tu número de socio.</p>
+    </div>
+
     <section class="panel stack" id="avisos" data-push-key="${config.push.publicKey}" data-token="${member.access_token}" data-count="${pushCount}">
       <h3>Avisos de partidos</h3>
       <p>Te avisamos en el móvil cuando haya partido o noticia importante. Pocos y útiles, prometido.</p>
@@ -227,6 +246,19 @@ export function cardPage({ member, favorite, players, lockedUntil, pushCount, ju
           </form>`}
     </section>
 
+    <section class="panel stack" id="oraculo">
+      <h3>El Oráculo</h3>
+      ${oracle
+        ? html`<p class="oracle-me"><b class="mono">${oracle.points}</b> puntos · puesto <b>${oracle.position}</b> · ${oracle.played} ${oracle.played === 1 ? 'porra' : 'porras'}</p>`
+        : html`<p>Predice el MVP, el fraude y el resultado de cada partido para sumar puntos.</p>`}
+      <form class="row-actions" method="post" action="/socio/${member.access_token}/oraculo" style="align-items:center">
+        <input type="hidden" name="hidden" value="${member.oracle_hidden ? '0' : '1'}">
+        <span class="muted" style="flex:1 1 240px">${member.oracle_hidden ? 'Ahora mismo no sales en la clasificación pública.' : 'Sales en la clasificación pública con tu nick.'}</span>
+        <button class="btn small ghost" type="submit">${member.oracle_hidden ? 'Salir en la clasificación' : 'No salir en la clasificación'}</button>
+      </form>
+      <p><a href="/oraculo">Ver la clasificación</a></p>
+    </section>
+
     <section class="panel stack">
       <h3>Comprobar el carné</h3>
       <p>En eventos, enseña este enlace para demostrar que eres socio:</p>
@@ -246,7 +278,7 @@ export function cardPage({ member, favorite, players, lockedUntil, pushCount, ju
       <form method="post" action="/olvidar-dispositivo"><button class="btn small ghost" type="submit">Olvidar este dispositivo</button></form>
     </div>
   </div>`;
-  return layout({ title: verified ? `Socio #${pad(member.number)}` : 'Tu carné', body, scripts: ['/js/card.js'], manifest: `/manifest.webmanifest?t=${member.access_token}` });
+  return layout({ title: verified ? `Socio #${pad(member.number)}` : 'Tu carné', body, scripts: ['/js/card.js', '/js/share.js'], manifest: `/manifest.webmanifest?t=${member.access_token}` });
 }
 
 export function checkPage({ member }) {
@@ -280,4 +312,39 @@ export function notFoundPage() {
 
 export function legalPage({ title, path, content }) {
   return layout({ title, path, body: html`<section class="section"><div class="wrap prose">${raw(content)}</div></section>` });
+}
+
+export function oracleTable(rows, { meId } = {}) {
+  if (!rows.length) return html`<p class="empty">La clasificación arranca con el primer partido cerrado. Vota tu predicción en la página del próximo partido.</p>`;
+  return html`<ol class="oracle">
+    ${rows.map((r) => html`<li class="${r.member_id === meId ? 'me' : ''}${r.position === 1 ? ' first' : ''}">
+      <span class="pos mono">${r.position}</span>
+      <span class="who"><b>${r.nick}</b><small class="mono">#${pad(r.number)}${r.member_id === meId ? ' · tú' : ''}</small></span>
+      <span class="stats mono">${r.played} ${r.played === 1 ? 'porra' : 'porras'} · ${r.exact} ${r.exact === 1 ? 'exacto' : 'exactos'}</span>
+      <span class="pts mono">${r.points}<small>pts</small></span>
+    </li>`)}
+  </ol>`;
+}
+
+export function oraclePage({ rows, me, member }) {
+  return layout({
+    title: 'El Oráculo',
+    path: '/oraculo',
+    body: html`<section class="section"><div class="wrap stack" style="gap:24px">
+      <div class="section-head" style="margin-bottom:0">
+        <div class="stack" style="gap:8px"><p class="eyebrow">La porra de los socios</p><h2>El Oráculo de Malos</h2></div>
+        <p class="muted">Antes de cada partido, predice el MVP, el fraude y el resultado. Cuenta el veredicto final de la afición.</p>
+      </div>
+      <ul class="points-legend">
+        <li><b class="mono">+${POINTS.mvp}</b> aciertas el MVP</li>
+        <li><b class="mono">+${POINTS.fraud}</b> aciertas el fraude</li>
+        <li><b class="mono">+${POINTS.exact}</b> resultado exacto</li>
+        <li><b class="mono">+${POINTS.winner}</b> solo el ganador</li>
+      </ul>
+      ${me ? html`<p class="alert info">Vas <b>${me.position}.º</b> con <b>${me.points}</b> puntos${me.hidden ? ' (no sales en la lista pública: solo lo ves tú)' : ''}.</p>`
+        : member ? '' : html`<p class="alert info">¿Quieres jugar? <a href="/hazte-socio">Hazte socio</a> y vota tu predicción del próximo partido.</p>`}
+      ${oracleTable(rows, { meId: member?.id })}
+      <p class="muted" style="font-size:.85rem">Empate a puntos: va delante quien tiene más resultados exactos y, después, el número de socio más bajo. Los puntos de un partido son provisionales hasta que se cierra su votación final (${VOTE_POST_DAYS} días).</p>
+    </div></section>`,
+  });
 }

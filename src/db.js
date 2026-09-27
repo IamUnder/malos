@@ -95,6 +95,12 @@ const migrations = [
   CREATE INDEX match_stats_player ON match_stats(player_id);
   UPDATE matches SET closed_at = starts_at WHERE result != '';
   `,
+  // 4 — porra (El Oráculo): formato del partido, resultado predicho y opción de no salir en la clasificación
+  `
+  ALTER TABLE matches ADD COLUMN best_of INTEGER NOT NULL DEFAULT 1;        -- 1, 3 o 5
+  ALTER TABLE match_votes ADD COLUMN score TEXT NOT NULL DEFAULT '';       -- "2-1" desde el punto de vista de Malos (solo en 'pre')
+  ALTER TABLE members ADD COLUMN oracle_hidden INTEGER NOT NULL DEFAULT 0; -- 1 = no sale en la clasificación pública
+  `,
 ];
 
 mkdirSync(dirname(config.dbPath), { recursive: true });

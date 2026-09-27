@@ -58,17 +58,18 @@ export const listMatches = (limit = 50) =>
 export const getMatch = (id) => db.prepare('SELECT * FROM matches WHERE id = ?').get(id);
 export const deleteMatch = (id) => db.prepare('DELETE FROM matches WHERE id = ?').run(id);
 
-export function saveMatch({ id, startsAt, opponent, competition, game, streamUrl, result }) {
+export function saveMatch({ id, startsAt, opponent, competition, game, streamUrl, result, bestOf = 1 }) {
   result = result || '';
   const before = id ? getMatch(id) : null;
   // closed_at marca cuándo se cerró el partido (se puso resultado): abre la votación de confirmación.
   const closedAt = !result ? null : before?.result ? before.closed_at : now();
-  const values = [startsAt.toISOString(), opponent, competition || '', game || 'lol', streamUrl || '', result, closedAt];
+  const bo = [1, 3, 5].includes(Number(bestOf)) ? Number(bestOf) : 1;
+  const values = [startsAt.toISOString(), opponent, competition || '', game || 'lol', streamUrl || '', result, closedAt, bo];
   if (id) {
-    db.prepare('UPDATE matches SET starts_at=?, opponent=?, competition=?, game=?, stream_url=?, result=?, closed_at=? WHERE id=?').run(...values, id);
+    db.prepare('UPDATE matches SET starts_at=?, opponent=?, competition=?, game=?, stream_url=?, result=?, closed_at=?, best_of=? WHERE id=?').run(...values, id);
     return id;
   }
-  return Number(db.prepare('INSERT INTO matches (starts_at, opponent, competition, game, stream_url, result, closed_at) VALUES (?,?,?,?,?,?,?)').run(...values).lastInsertRowid);
+  return Number(db.prepare('INSERT INTO matches (starts_at, opponent, competition, game, stream_url, result, closed_at, best_of) VALUES (?,?,?,?,?,?,?,?)').run(...values).lastInsertRowid);
 }
 
 export const lastPlayedMatch = () => db.prepare("SELECT * FROM matches WHERE result != '' ORDER BY starts_at DESC LIMIT 1").get();
@@ -97,11 +98,12 @@ export function voteCandidates(match) {
   return db.prepare('SELECT * FROM players WHERE active = 1 AND game = ? ORDER BY sort, nick COLLATE NOCASE').all(match.game);
 }
 
-export function castVote({ match, member, phase, mvpId, fraudId }) {
+export function castVote({ match, member, phase, mvpId, fraudId, score = '' }) {
   db.prepare(`
-    INSERT INTO match_votes (match_id, member_id, phase, mvp_id, fraud_id, voted_at) VALUES (?,?,?,?,?,?)
-    ON CONFLICT(match_id, member_id, phase) DO UPDATE SET mvp_id = excluded.mvp_id, fraud_id = excluded.fraud_id, voted_at = excluded.voted_at
-  `).run(match.id, member.id, phase, mvpId, fraudId, now());
+    INSERT INTO match_votes (match_id, member_id, phase, mvp_id, fraud_id, score, voted_at) VALUES (?,?,?,?,?,?,?)
+    ON CONFLICT(match_id, member_id, phase) DO UPDATE SET
+      mvp_id = excluded.mvp_id, fraud_id = excluded.fraud_id, score = excluded.score, voted_at = excluded.voted_at
+  `).run(match.id, member.id, phase, mvpId, fraudId, phase === 'pre' ? score : '', now());
 }
 
 export function memberVotes(matchId, memberId) {
@@ -117,11 +119,94 @@ export function voteTally(matchId, phase) {
   `).all(matchId, phase);
   const { total } = db.prepare('SELECT COUNT(*) AS total FROM match_votes WHERE match_id = ? AND phase = ?').get(matchId, phase);
   const withShare = (rows) => rows.map((r) => ({ ...r, share: total ? r.votes / total : 0 }));
-  return { total, mvp: withShare(count('mvp_id')), fraud: withShare(count('fraud_id')) };
+  const scores = phase === 'pre'
+    ? db.prepare("SELECT score, COUNT(*) AS votes FROM match_votes WHERE match_id = ? AND phase = 'pre' AND score != '' GROUP BY score ORDER BY votes DESC, score DESC").all(matchId)
+    : [];
+  return { total, mvp: withShare(count('mvp_id')), fraud: withShare(count('fraud_id')), scores };
 }
 
 /** Ganadores (con empates) de una lista de recuento. */
 export const winners = (rows) => (rows.length ? rows.filter((r) => r.votes === rows[0].votes) : []);
+
+// ---------- El Oráculo (porra) ----------
+//
+// Cada predicción ("pre") puntúa cuando el partido tiene resultado, comparándola con el veredicto final
+// de la afición (MVP y fraude, empates incluidos) y con el marcador. Mientras la votación final siga
+// abierta, los puntos de ese partido son provisionales.
+
+export const POINTS = { mvp: 3, fraud: 3, exact: 5, winner: 2 };
+
+/** Marcadores posibles de un partido al mejor de N, desde el punto de vista de Malos: BO3 → 2-0, 2-1, 1-2, 0-2. */
+export function scoreOptions(bestOf = 1) {
+  const w = Math.ceil(Number(bestOf) / 2) || 1;
+  const out = [];
+  for (let l = 0; l < w; l++) out.push(`${w}-${l}`);
+  for (let l = w - 1; l >= 0; l--) out.push(`${l}-${w}`);
+  return out;
+}
+
+export function parseScore(text) {
+  const m = /^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/.exec(String(text || ''));
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+/** Lo que realmente pasó en un partido cerrado: ganadores de la votación final y marcador. */
+export function matchOutcome(match) {
+  const post = voteTally(match.id, 'post');
+  return {
+    mvp: new Set(winners(post.mvp).map((p) => p.id)),
+    fraud: new Set(winners(post.fraud).map((p) => p.id)),
+    score: parseScore(match.result),
+    final: votePhase(match) === null,
+  };
+}
+
+/** Puntos de una predicción frente al resultado: { mvp, fraud, exact, winner, points }. */
+export function scorePrediction(vote, outcome) {
+  const hit = { mvp: outcome.mvp.has(vote.mvp_id), fraud: outcome.fraud.has(vote.fraud_id), exact: false, winner: false };
+  const guess = parseScore(vote.score);
+  if (guess && outcome.score) {
+    hit.exact = guess[0] === outcome.score[0] && guess[1] === outcome.score[1];
+    hit.winner = !hit.exact && Math.sign(guess[0] - guess[1]) === Math.sign(outcome.score[0] - outcome.score[1]);
+  }
+  hit.points = (hit.mvp ? POINTS.mvp : 0) + (hit.fraud ? POINTS.fraud : 0) + (hit.exact ? POINTS.exact : 0) + (hit.winner ? POINTS.winner : 0);
+  return hit;
+}
+
+/**
+ * Clasificación de la porra. Cada fila: { member_id, nick, number, hidden, points, played, hits, exact, position }.
+ * Empatan (misma posición) quienes tienen los mismos puntos y los mismos marcadores exactos.
+ */
+export function oracleStandings() {
+  const closed = db.prepare("SELECT * FROM matches WHERE result != ''").all();
+  const outcomes = new Map(closed.map((m) => [m.id, matchOutcome(m)]));
+  const votes = db.prepare(`
+    SELECT v.*, m.nick, m.number, m.oracle_hidden FROM match_votes v JOIN members m ON m.id = v.member_id
+    WHERE v.phase = 'pre' AND m.verified_at IS NOT NULL
+  `).all();
+
+  const rows = new Map();
+  for (const v of votes) {
+    const outcome = outcomes.get(v.match_id);
+    if (!outcome) continue;
+    const r = rows.get(v.member_id) || { member_id: v.member_id, nick: v.nick, number: v.number, hidden: Boolean(v.oracle_hidden), points: 0, played: 0, hits: 0, exact: 0 };
+    const s = scorePrediction(v, outcome);
+    r.points += s.points;
+    r.played += 1;
+    r.hits += Number(s.mvp) + Number(s.fraud) + Number(s.exact || s.winner);
+    r.exact += Number(s.exact);
+    rows.set(v.member_id, r);
+  }
+  const list = [...rows.values()].sort((a, b) => b.points - a.points || b.exact - a.exact || a.number - b.number);
+  list.forEach((r, i) => {
+    const prev = list[i - 1];
+    r.position = prev && prev.points === r.points && prev.exact === r.exact ? prev.position : i + 1;
+  });
+  return list;
+}
+
+export const setOracleHidden = (memberId, hidden) =>
+  db.prepare('UPDATE members SET oracle_hidden = ? WHERE id = ?').run(hidden ? 1 : 0, memberId);
 
 // ---------- Estadísticas (KDA) ----------
 

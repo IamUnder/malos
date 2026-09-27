@@ -5,6 +5,7 @@ const NAV = [
   ['/', 'Inicio'],
   ['/plantilla', 'Plantilla'],
   ['/ranking', 'Ranking'],
+  ['/oraculo', 'Oráculo'],
   ['/partidos', 'Partidos'],
   ['/noticias', 'Noticias'],
   ['/mi-tarjeta', 'Mi tarjeta'],

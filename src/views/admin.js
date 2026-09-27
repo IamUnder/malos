@@ -82,7 +82,8 @@ export function matchesAdminPage({ matches, editing, flash }) {
         <div class="field"><label for="competition">Competición</label><input id="competition" name="competition" type="text" maxlength="60" placeholder="Liga UCLM · Jornada 3" value="${m.competition || ''}"></div>
         <div class="field"><label for="game">Juego</label><select id="game" name="game">${Object.entries(GAMES).map(([k, v]) => html`<option value="${k}" ${k === (m.game || 'lol') ? 'selected' : ''}>${v}</option>`)}</select></div>
         <div class="field"><label for="streamUrl">Enlace del directo</label><input id="streamUrl" name="streamUrl" type="url" placeholder="https://twitch.tv/..." value="${m.stream_url || ''}"></div>
-        <div class="field"><label for="result">Resultado</label><input id="result" name="result" type="text" maxlength="20" placeholder="Vacío si no se ha jugado · p. ej. 2-1" value="${m.result || ''}"></div>
+        <div class="field"><label for="bestOf">Formato</label><select id="bestOf" name="bestOf">${[1, 3, 5].map((n) => html`<option value="${n}" ${n === (m.best_of || 1) ? 'selected' : ''}>Al mejor de ${n} (BO${n})</option>`)}</select><span class="hint">Define qué resultados se pueden predecir en la porra.</span></div>
+        <div class="field"><label for="result">Resultado</label><input id="result" name="result" type="text" maxlength="20" placeholder="Vacío si no se ha jugado · p. ej. 2-1" value="${m.result || ''}"><span class="hint">Siempre con Malos primero: 2-1 es victoria de Malos, 1-2 derrota.</span></div>
       </div>
       <label class="check"><input type="checkbox" name="notifyVote" ${config.push.enabled ? '' : 'disabled'}>
         <span>Al guardar con resultado, avisar a los socios de que ya pueden votar al MVP y al fraude.</span></label>

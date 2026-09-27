@@ -31,6 +31,7 @@ const FLASH = {
   publicado: (q) => ({ kind: 'ok', message: q.enviados ? `Publicado. Aviso enviado a ${q.enviados} dispositivos${Number(q.fallidos) ? ` (${q.fallidos} fallidos)` : ''}.` : 'Publicado en la web.' }),
   borrado: () => ({ kind: 'ok', message: 'Borrado.' }),
   guardado: (q) => ({ kind: 'ok', message: `Guardado.${q.enviados ? ` Aviso enviado a ${q.enviados} dispositivos.` : ''}` }),
+  formato: () => ({ kind: 'error', message: 'Guardado, pero el resultado debería tener el formato 2-1 (Malos primero). Si no, la porra no puede puntuar el marcador.' }),
   'pon-kda': (q) => ({ kind: 'ok', message: `Partido cerrado: ya se puede votar la confirmación.${q.enviados ? ` Aviso enviado a ${q.enviados} dispositivos.` : ''} Ahora mete los KDA.` }),
   faltan: () => ({ kind: 'error', message: 'Faltan campos obligatorios.' }),
   corregidos: (q) => ({ kind: 'ok', message: `Guardado. He corregido: ${q.nombres}.` }),
@@ -81,7 +82,10 @@ adminRoutes.post('/partidos', async (c) => {
     game: String(f.game || 'lol'),
     streamUrl: /^https:\/\//.test(String(f.streamUrl || '')) ? String(f.streamUrl) : '',
     result,
+    bestOf: f.bestOf,
   });
+  // Un resultado que no es "N-M" se guarda, pero no puntúa en la porra: se avisa.
+  if (result && !data.parseScore(result)) return c.redirect(`/admin/partidos?editar=${id}&ok=formato`);
   let pushed = '';
   if (f.notifyVote && result) {
     const { sent } = await broadcast({

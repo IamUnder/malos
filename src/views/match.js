@@ -1,6 +1,6 @@
 // Página de un partido (votaciones de MVP/fraude y marcador) y tabla de estadísticas de la temporada.
 import { html } from 'hono/html';
-import { GAMES, VOTE_POST_DAYS, winners } from '../data.js';
+import { GAMES, POINTS, VOTE_POST_DAYS, scoreOptions, winners } from '../data.js';
 import { formatDate, formatDateTime } from '../lib/format.js';
 import { championIcon, championName } from '../lib/champions.js';
 import { layout } from './layout.js';
@@ -56,13 +56,52 @@ function tallyList(rows, total, kind) {
   </ol>`;
 }
 
-function tallyBlock(title, tally, note) {
+function scoreTally(scores, total) {
+  if (!scores?.length) return '';
+  return html`<div class="stack" style="gap:8px"><p class="eyebrow">Resultado</p>
+    <ul class="score-tally">${scores.map((r) => html`<li><b class="mono">${r.score}</b><span class="bar" aria-hidden="true"><i style="width:${Math.round((r.votes / total) * 100)}%"></i></span><span class="mono muted">${Math.round((r.votes / total) * 100)}%</span></li>`)}</ul>
+  </div>`;
+}
+
+function tallyBlock(title, tally, note, { hidden = null } = {}) {
+  const head = html`<div><h3>${title}</h3><p class="muted">${tally.total} ${tally.total === 1 ? 'voto' : 'votos'}${note ? ` · ${note}` : ''}</p></div>`;
+  // Oculto para no influir: solo se enseña el número de votos y el motivo.
+  if (hidden) return html`<section class="panel stack">${head}<p class="hidden-tally">${hidden}</p></section>`;
   return html`<section class="panel stack">
-    <div><h3>${title}</h3><p class="muted">${tally.total} ${tally.total === 1 ? 'voto' : 'votos'}${note ? ` · ${note}` : ''}</p></div>
+    ${head}
     <div class="grid-2">
       <div class="stack" style="gap:8px"><p class="eyebrow">MVP</p>${tallyList(tally.mvp, tally.total, 'mvp')}</div>
       <div class="stack" style="gap:8px"><p class="eyebrow">Fraude</p>${tallyList(tally.fraud, tally.total, 'fraud')}</div>
     </div>
+    ${scoreTally(tally.scores, tally.total)}
+  </section>`;
+}
+
+function scorePicker(match, selected) {
+  return html`<div class="score-picker">
+    ${scoreOptions(match.best_of).map((sc) => {
+      const [a, b] = sc.split('-').map(Number);
+      return html`<label><input type="radio" name="score" value="${sc}" required ${sc === selected ? 'checked' : ''}>
+        <span class="${a > b ? 'win' : 'loss'}"><b class="mono">${sc}</b><small>${a > b ? 'Gana Malos' : 'Pierde Malos'}</small></span></label>`;
+    })}
+  </div>`;
+}
+
+/** Cómo le ha ido a este socio en la porra de este partido. */
+function myPredictionResult(result) {
+  if (!result) return '';
+  const line = (ok, label, pts) => html`<li class="${ok ? 'hit' : 'miss'}"><span>${ok ? '✓' : '✗'}</span> ${label}${ok ? html` <b>+${pts}</b>` : ''}</li>`;
+  return html`<section class="panel stack my-porra">
+    <div class="row-actions" style="justify-content:space-between;align-items:baseline">
+      <h3>Tu porra</h3><p class="porra-points mono">+${result.points} <small>puntos${result.final ? '' : ' · provisional'}</small></p>
+    </div>
+    <ul>
+      ${line(result.mvp, 'MVP', POINTS.mvp)}
+      ${line(result.fraud, 'Fraude', POINTS.fraud)}
+      ${result.exact ? line(true, 'Resultado exacto', POINTS.exact) : line(result.winner, 'Ganador', POINTS.winner)}
+    </ul>
+    ${result.final ? '' : html`<p class="muted">Puede cambiar hasta que se cierre el veredicto final de la afición.</p>`}
+    <p><a href="/oraculo">Ver la clasificación de El Oráculo</a></p>
   </section>`;
 }
 
@@ -92,11 +131,13 @@ function voteForm({ match, phase, candidates, member, myVote }) {
     <div><h3>${title}</h3><p class="muted">${hint}${myVote ? ' Ya has votado: puedes cambiar tu voto.' : ''}</p></div>
     <fieldset class="field"><legend>MVP <span class="muted">· el mejor del partido</span></legend>${votePicker('mvp', candidates, myVote?.mvp_id)}</fieldset>
     <fieldset class="field"><legend>Fraude <span class="muted">· el que no apareció</span></legend>${votePicker('fraud', candidates, myVote?.fraud_id)}</fieldset>
+    ${phase === 'pre' ? html`<fieldset class="field"><legend>Resultado <span class="muted">· al mejor de ${match.best_of || 1}</span></legend>${scorePicker(match, myVote?.score)}</fieldset>
+      <p class="hint muted">Puntos de El Oráculo: MVP +${POINTS.mvp} · fraude +${POINTS.fraud} · resultado exacto +${POINTS.exact} (o +${POINTS.winner} si aciertas solo el ganador).</p>` : ''}
     <button class="btn" type="submit">${myVote ? 'Cambiar mi voto' : 'Votar'}</button>
   </form>`;
 }
 
-export function matchPage({ match, phase, candidates, member, myVotes, preTally, postTally, stats, flash }) {
+export function matchPage({ match, phase, candidates, member, myVotes, preTally, postTally, stats, flash, myResult }) {
   const played = Boolean(match.result);
   const status = played
     ? html`<span class="pill ok">Final · ${match.result}</span>`
@@ -118,7 +159,13 @@ export function matchPage({ match, phase, candidates, member, myVotes, preTally,
       ${played && !phase ? html`<p class="alert info">La votación de este partido ya está cerrada.</p>` : ''}
       ${stats.length ? html`<section class="stack"><h2>Marcador</h2>${scoreboard(stats)}</section>` : ''}
       ${played ? tallyBlock('Veredicto final de la afición', postTally, 'después del partido') : ''}
-      ${tallyBlock('Predicción de la afición', preTally, 'antes del partido')}
+      ${myPredictionResult(myResult)}
+      ${tallyBlock('Predicción de la afición', preTally, 'antes del partido', {
+        // Mientras se puede predecir, solo la ve quien ya ha votado: así nadie se deja arrastrar por la mayoría.
+        hidden: phase === 'pre' && !myVotes.pre
+          ? (member ? 'Vota tu predicción para ver qué opina el resto de la afición.' : 'Se verá cuando empiece el partido. Los socios la ven en cuanto votan.')
+          : null,
+      })}
       <p><a href="/partidos">Todos los partidos</a></p>
     </div>`;
   return layout({ title: `Malos vs ${match.opponent}`, path: '/partidos', body });

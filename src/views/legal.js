@@ -19,6 +19,7 @@ export const privacy = `
   <li><b>Email</b>: para confirmar que eres tú y mandarte el enlace a tu carné. No enviamos publicidad por email.</li>
   <li><b>Jugador favorito</b>: para el ranking de fans. En el ranking solo se publican totales, nunca quién ha votado a quién.</li>
   <li><b>Votos de MVP y fraude</b> de cada partido: se publican solo los totales, nunca quién ha votado a quién.</li>
+  <li><b>Porra (El Oráculo)</b>: tus predicciones sirven para calcular tus puntos. En la clasificación pública salen tu nick, tu número de socio y tus puntos; puedes dejar de salir desde tu carné.</li>
   <li><b>Suscripción a avisos</b> (solo si los activas): la dirección técnica que da tu navegador para recibir notificaciones.</li>
 </ul>
 <p>No pedimos DNI, teléfono, dirección ni fecha de nacimiento.</p>
