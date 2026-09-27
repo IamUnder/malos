@@ -5,7 +5,7 @@ import { loginAdmin, logoutAdmin, requireAdmin } from '../lib/auth.js';
 import { tooMany } from '../lib/guard.js';
 import { fromLocalInput, pad } from '../lib/format.js';
 import * as views from '../views/admin.js';
-import { resolveChampions } from '../lib/champions.js';
+import { resolveChampion, resolveChampions } from '../lib/champions.js';
 
 export const adminRoutes = new Hono();
 
@@ -30,8 +30,10 @@ adminRoutes.use('*', requireAdmin);
 const FLASH = {
   publicado: (q) => ({ kind: 'ok', message: q.enviados ? `Publicado. Aviso enviado a ${q.enviados} dispositivos${Number(q.fallidos) ? ` (${q.fallidos} fallidos)` : ''}.` : 'Publicado en la web.' }),
   borrado: () => ({ kind: 'ok', message: 'Borrado.' }),
-  guardado: () => ({ kind: 'ok', message: 'Guardado.' }),
+  guardado: (q) => ({ kind: 'ok', message: `Guardado.${q.enviados ? ` Aviso enviado a ${q.enviados} dispositivos.` : ''}` }),
+  'pon-kda': (q) => ({ kind: 'ok', message: `Partido cerrado: ya se puede votar la confirmación.${q.enviados ? ` Aviso enviado a ${q.enviados} dispositivos.` : ''} Ahora mete los KDA.` }),
   faltan: () => ({ kind: 'error', message: 'Faltan campos obligatorios.' }),
+  corregidos: (q) => ({ kind: 'ok', message: `Guardado. He corregido: ${q.nombres}.` }),
   desconocidos: (q) => ({ kind: 'error', message: `Guardado, pero no reconozco estos campeones: ${q.nombres}. Revisa cómo se escriben.` }),
 };
 const flashOf = (c) => FLASH[c.req.query('ok')]?.(c.req.query()) || null;
@@ -70,16 +72,62 @@ adminRoutes.post('/partidos', async (c) => {
   const opponent = String(f.opponent || '').trim().slice(0, 60);
   const startsAt = fromLocalInput(String(f.startsAt || ''));
   if (!opponent || Number.isNaN(startsAt.getTime())) return c.redirect('/admin/partidos?ok=faltan');
-  data.saveMatch({
+  const result = String(f.result || '').trim().slice(0, 20);
+  const id = data.saveMatch({
     id: Number(f.id) || null,
     startsAt,
     opponent,
     competition: String(f.competition || '').trim().slice(0, 60),
     game: String(f.game || 'lol'),
     streamUrl: /^https:\/\//.test(String(f.streamUrl || '')) ? String(f.streamUrl) : '',
-    result: String(f.result || '').trim().slice(0, 20),
+    result,
   });
-  return c.redirect('/admin/partidos?ok=guardado');
+  let pushed = '';
+  if (f.notifyVote && result) {
+    const { sent } = await broadcast({
+      title: `Malos ${result} ${opponent}`,
+      body: '¿Quién ha sido el MVP y quién el fraude? Ya puedes votar.',
+      url: `/partidos/${id}`,
+    });
+    pushed = `&enviados=${sent}`;
+  }
+  // Partido recién cerrado sin estadísticas: directo a meter los KDA.
+  if (result && !data.matchStats(id).length) return c.redirect(`/admin/partidos/${id}/estadisticas?ok=pon-kda${pushed}`);
+  return c.redirect(`/admin/partidos?ok=guardado${pushed}`);
+});
+
+// KDA de cada jugador en un partido
+function statsRows(match) {
+  const existing = new Map(data.matchStats(match.id).map((s) => [s.player_id, s]));
+  const players = data.listPlayers({ includeInactive: true })
+    .filter((p) => p.game === match.game && (p.active || existing.has(p.id)));
+  return players.map((p) => ({ ...p, stat: existing.get(p.id) || null }));
+}
+
+adminRoutes.get('/partidos/:id/estadisticas', (c) => {
+  const match = data.getMatch(Number(c.req.param('id')));
+  if (!match) return c.notFound();
+  return c.html(views.matchStatsAdminPage({ match, rows: statsRows(match), flash: flashOf(c) }));
+});
+
+adminRoutes.post('/partidos/:id/estadisticas', async (c) => {
+  const match = data.getMatch(Number(c.req.param('id')));
+  if (!match) return c.notFound();
+  const f = await c.req.parseBody();
+  const num = (v) => Math.max(0, Math.min(999, Math.trunc(Number(v) || 0)));
+  const unknown = [];
+  const rows = [];
+  for (const p of statsRows(match)) {
+    if (!f[`played_${p.id}`]) continue;
+    const text = String(f[`champion_${p.id}`] || '').trim();
+    const champ = text ? resolveChampion(text) : null;
+    if (text && !champ) unknown.push(text);
+    rows.push({ playerId: p.id, champion: champ?.id || '', kills: num(f[`k_${p.id}`]), deaths: num(f[`d_${p.id}`]), assists: num(f[`a_${p.id}`]) });
+  }
+  data.saveMatchStats(match.id, rows);
+  const base = `/admin/partidos/${match.id}/estadisticas`;
+  if (unknown.length) return c.redirect(`${base}?ok=desconocidos&nombres=${encodeURIComponent(unknown.join(', '))}`);
+  return c.redirect(`${base}?ok=guardado`);
 });
 
 adminRoutes.post('/partidos/:id/borrar', (c) => { data.deleteMatch(Number(c.req.param('id'))); return c.redirect('/admin/partidos?ok=borrado'); });
@@ -97,7 +145,7 @@ adminRoutes.post('/jugadores', async (c) => {
   const f = await c.req.parseBody();
   const nick = String(f.nick || '').trim().slice(0, 24);
   if (!nick) return c.redirect('/admin/jugadores?ok=faltan');
-  const { ids, unknown } = resolveChampions(f.champions);
+  const { ids, unknown, corrected } = resolveChampions(f.champions);
   data.savePlayer({
     id: Number(f.id) || null,
     nick,
@@ -109,6 +157,7 @@ adminRoutes.post('/jugadores', async (c) => {
     active: Boolean(f.active),
   });
   if (unknown.length) return c.redirect(`/admin/jugadores?ok=desconocidos&nombres=${encodeURIComponent(unknown.join(', '))}`);
+  if (corrected.length) return c.redirect(`/admin/jugadores?ok=corregidos&nombres=${encodeURIComponent(corrected.join(', '))}`);
   return c.redirect('/admin/jugadores?ok=guardado');
 });
 

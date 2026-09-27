@@ -7,6 +7,8 @@ Web del club de fans de **Malos** (Ciudad Real): [malos.es](https://malos.es).
 - **Avisos push** de partidos y noticias, que se mandan desde el panel.
 - **Plantilla** con sus campeones favoritos, que hacen de foto mientras no haya oficiales.
 - **Ranking de fans**: cada socio vota a su jugador favorito.
+- **MVP y fraude de cada partido**: los socios votan una predicción antes del partido y el veredicto final después.
+- **Estadísticas**: KDA de cada jugador por partido y acumulado de la temporada, en la portada.
 - **Panel de administración** para noticias y avisos, partidos, plantilla y socios.
 - Enlace de **donaciones** para cubrir el dominio y el servidor.
 

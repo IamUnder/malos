@@ -2,9 +2,10 @@ import { html, raw } from 'hono/html';
 import { config } from '../config.js';
 import { formatDate, pad } from '../lib/format.js';
 import { layout } from './layout.js';
+import { lastMatchCard, seasonTable } from './match.js';
 import { alert, carnet, fixtures, matchbar, news, playerPicker, roster, standings, supportBlock } from './components.js';
 
-export function homePage({ stats, match, rank, players, posts, upcoming }) {
+export function homePage({ stats, match, rank, players, posts, upcoming, season, last }) {
   const body = html`
   <section class="hero">
     <div class="wrap">
@@ -34,6 +35,18 @@ export function homePage({ stats, match, rank, players, posts, upcoming }) {
       ${rank.length > 5 ? html`<p style="margin-top:16px"><a href="/ranking">Ver la clasificación completa</a></p>` : ''}
     </div>
   </section>
+  ${season.some((r) => r.games > 0) ? html`<section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="stack" style="gap:8px"><p class="eyebrow">Temporada</p><h2>Los números</h2></div>
+        <p class="muted">Se actualizan después de cada partido. El MVP y el fraude los decide la afición.</p>
+      </div>
+      <div class="stats-cols">
+        ${lastMatchCard(last)}
+        ${seasonTable(season)}
+      </div>
+    </div>
+  </section>` : ''}
   <section class="section">
     <div class="wrap">
       <div class="section-head">
@@ -228,7 +241,10 @@ export function cardPage({ member, favorite, players, lockedUntil, pushCount, ju
         <button class="btn small danger" type="submit">Borrar mi cuenta</button>
       </form>
     </details>
-    <p class="muted">Guarda esta página en favoritos: es tu acceso al carné. No compartas el enlace.</p>
+    <div class="row-actions" style="align-items:center">
+      <p class="muted" style="flex:1 1 280px">Este dispositivo ya te recuerda: «Mi tarjeta» te trae aquí directamente. No compartas el enlace de tu carné.</p>
+      <form method="post" action="/olvidar-dispositivo"><button class="btn small ghost" type="submit">Olvidar este dispositivo</button></form>
+    </div>
   </div>`;
   return layout({ title: verified ? `Socio #${pad(member.number)}` : 'Tu carné', body, scripts: ['/js/card.js'], manifest: `/manifest.webmanifest?t=${member.access_token}` });
 }

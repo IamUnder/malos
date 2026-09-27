@@ -84,6 +84,8 @@ export function matchesAdminPage({ matches, editing, flash }) {
         <div class="field"><label for="streamUrl">Enlace del directo</label><input id="streamUrl" name="streamUrl" type="url" placeholder="https://twitch.tv/..." value="${m.stream_url || ''}"></div>
         <div class="field"><label for="result">Resultado</label><input id="result" name="result" type="text" maxlength="20" placeholder="Vacío si no se ha jugado · p. ej. 2-1" value="${m.result || ''}"></div>
       </div>
+      <label class="check"><input type="checkbox" name="notifyVote" ${config.push.enabled ? '' : 'disabled'}>
+        <span>Al guardar con resultado, avisar a los socios de que ya pueden votar al MVP y al fraude.</span></label>
       <div class="row-actions">
         <button class="btn" type="submit">${m.id ? 'Guardar cambios' : 'Añadir partido'}</button>
         ${m.id ? html`<a class="btn ghost" href="/admin/partidos">Cancelar</a>` : ''}
@@ -98,6 +100,8 @@ export function matchesAdminPage({ matches, editing, flash }) {
         <td class="num">${x.result || '—'}</td>
         <td><div class="row-actions">
           <a class="btn small ghost" href="/admin/partidos?editar=${x.id}">Editar</a>
+          <a class="btn small ghost" href="/admin/partidos/${x.id}/estadisticas">KDA${x.stats_count ? ` (${x.stats_count})` : ''}</a>
+          <a class="btn small ghost" href="/partidos/${x.id}">Ver</a>
           <form method="post" action="/admin/partidos/${x.id}/borrar" data-confirm="¿Borrar este partido?"><button class="btn small ghost" type="submit">Borrar</button></form>
         </div></td>
       </tr>`)}</tbody>
@@ -165,4 +169,29 @@ export function membersAdminPage({ members, q, flash }) {
     </form>
     ${membersTable(members)}
     <p class="muted">Borrar un socio elimina también su voto y sus avisos (derecho de supresión). Su número no se reutiliza.</p>`);
+}
+
+export function matchStatsAdminPage({ match, rows, flash }) {
+  return page('/admin/partidos', 'Estadísticas', html`
+    <div class="stack" style="gap:6px">
+      <p><a href="/admin/partidos">← Partidos</a></p>
+      <h2>KDA · Malos vs ${match.opponent}</h2>
+      <p class="muted">${formatDateTime(match.starts_at)}${match.result ? ` · Resultado ${match.result}` : ' · Aún sin resultado'}</p>
+    </div>
+    ${flashBox(flash)}
+    <form class="form" method="post" action="/admin/partidos/${match.id}/estadisticas">
+      <p class="muted">Marca quién jugó y pon sus totales del partido (si es un BO3, la suma de las partidas). Quienes jugaron son los que se pueden votar en la confirmación de MVP y fraude.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Jugó</th><th>Jugador</th><th>Campeón</th><th class="num">K</th><th class="num">D</th><th class="num">A</th></tr></thead>
+        <tbody>${rows.map((r) => html`<tr>
+          <td><input type="checkbox" name="played_${r.id}" ${r.stat ? 'checked' : ''} aria-label="${r.nick} jugó"></td>
+          <td><span class="player-cell">${avatar(r, { size: 32 })}<span><b>${r.nick}</b><br><small class="muted">${roleLabel(r.role)}</small></span></span></td>
+          <td><input type="text" name="champion_${r.id}" value="${r.stat?.champion ? championName(r.stat.champion) : ''}" placeholder="${parseChampions(r.champions).map(championName)[0] || 'Campeón'}" style="min-width:150px"></td>
+          <td><input type="number" name="k_${r.id}" min="0" max="999" value="${r.stat?.kills ?? ''}" style="width:80px"></td>
+          <td><input type="number" name="d_${r.id}" min="0" max="999" value="${r.stat?.deaths ?? ''}" style="width:80px"></td>
+          <td><input type="number" name="a_${r.id}" min="0" max="999" value="${r.stat?.assists ?? ''}" style="width:80px"></td>
+        </tr>`)}</tbody>
+      </table></div>
+      <div class="row-actions"><button class="btn" type="submit">Guardar estadísticas</button><a class="btn ghost" href="/partidos/${match.id}">Ver página del partido</a></div>
+    </form>`);
 }

@@ -45,7 +45,10 @@ export function matchbar(match) {
       ${isLive(match) ? html`<span class="live">EN DIRECTO</span>` : html`<span class="eyebrow" style="color:var(--mostaza)">Próximo partido</span>`}
       <p class="vs">Malos <span>vs</span> ${match.opponent}</p>
       <p class="when">${formatDateTime(match.starts_at)}${match.competition ? ` · ${match.competition}` : ''}</p>
-      ${match.stream_url ? html`<a class="btn" href="${match.stream_url}" target="_blank" rel="noopener">Verlo en directo</a>` : ''}
+      <div class="matchbar-actions">
+        <a class="btn ghost-light" href="/partidos/${match.id}">Vota MVP y fraude</a>
+        ${match.stream_url ? html`<a class="btn" href="${match.stream_url}" target="_blank" rel="noopener">Verlo en directo</a>` : ''}
+      </div>
     </div>
   </section>`;
 }
@@ -92,7 +95,7 @@ export function fixtures(matches) {
     ${matches.map((m) => html`<li>
       <span class="date">${formatDate(m.starts_at, { month: 'short' })}<b>${formatDate(m.starts_at, { day: 'numeric' })}</b></span>
       <span>
-        <span class="opp">vs ${m.opponent}</span><br>
+        <a class="opp" href="/partidos/${m.id}">vs ${m.opponent}</a><br>
         <span class="comp">${[m.competition, GAMES[m.game], formatDate(m.starts_at, { weekday: 'long', hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' · ')}</span>
       </span>
       ${m.result

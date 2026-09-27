@@ -6,7 +6,7 @@ const { owner, contactEmail } = config.legal;
 const domain = config.siteUrl.replace(/^https?:\/\//, '');
 
 export const privacy = `
-<p class="eyebrow">Última actualización: 26 de septiembre de 2026</p>
+<p class="eyebrow">Última actualización: 27 de septiembre de 2026</p>
 <h2>Política de privacidad</h2>
 <p>Esta web es un club de fans gratuito de Malos. Recogemos lo mínimo para darte tu carné de socio y avisarte de los partidos.</p>
 
@@ -18,9 +18,10 @@ export const privacy = `
   <li><b>Nick</b>: sale en tu carné y en la comprobación de carné.</li>
   <li><b>Email</b>: para confirmar que eres tú y mandarte el enlace a tu carné. No enviamos publicidad por email.</li>
   <li><b>Jugador favorito</b>: para el ranking de fans. En el ranking solo se publican totales, nunca quién ha votado a quién.</li>
+  <li><b>Votos de MVP y fraude</b> de cada partido: se publican solo los totales, nunca quién ha votado a quién.</li>
   <li><b>Suscripción a avisos</b> (solo si los activas): la dirección técnica que da tu navegador para recibir notificaciones.</li>
 </ul>
-<p>No pedimos DNI, teléfono, dirección ni fecha de nacimiento. No usamos cookies de publicidad ni de analítica.</p>
+<p>No pedimos DNI, teléfono, dirección ni fecha de nacimiento.</p>
 
 <h2>Base legal</h2>
 <p>Tu consentimiento, que das al apuntarte y al activar los avisos. Puedes retirarlo cuando quieras.</p>
@@ -43,7 +44,7 @@ export const privacy = `
 <p>Puedes ver tus datos en tu carné, cambiar tu favorito y darte de baja desde la misma página. Para cualquier otra cosa (acceso, rectificación, supresión, oposición o portabilidad) escribe a <a href="mailto:${contactEmail}">${contactEmail}</a>. Si crees que no hemos tratado bien tus datos, puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).</p>
 
 <h2>Cookies</h2>
-<p>La web pública no usa cookies. El panel de administración usa una cookie técnica de sesión solo para quien lo administra.</p>
+<p>No usamos cookies de publicidad ni de analítica. Solo hay dos cookies técnicas, necesarias para que la web funcione y que por eso no requieren consentimiento: <b>malos_socio</b>, que recuerda tu carné en ese dispositivo durante un año para no pedirte el email cada vez (se borra con «Olvidar este dispositivo» o al darte de baja), y <b>malos_admin</b>, la sesión del panel de administración.</p>
 `;
 
 export const legalNotice = `

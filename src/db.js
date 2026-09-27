@@ -69,6 +69,32 @@ const migrations = [
   ALTER TABLE players ADD COLUMN name TEXT NOT NULL DEFAULT '';
   ALTER TABLE players ADD COLUMN champions TEXT NOT NULL DEFAULT '';  -- ids de Data Dragon separados por comas
   `,
+  // 3 — votaciones de MVP y fraude por partido, y estadísticas (KDA) de cada jugador en cada partido
+  `
+  ALTER TABLE matches ADD COLUMN closed_at TEXT;   -- cuándo se puso el resultado (abre la votación de confirmación)
+
+  CREATE TABLE match_votes (
+    match_id   INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+    member_id  TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    phase      TEXT NOT NULL CHECK (phase IN ('pre', 'post')),   -- pre = predicción, post = confirmación
+    mvp_id     INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    fraud_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    voted_at   TEXT NOT NULL,
+    PRIMARY KEY (match_id, member_id, phase)
+  );
+
+  CREATE TABLE match_stats (
+    match_id   INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+    player_id  INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    champion   TEXT NOT NULL DEFAULT '',
+    kills      INTEGER NOT NULL DEFAULT 0,
+    deaths     INTEGER NOT NULL DEFAULT 0,
+    assists    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (match_id, player_id)
+  );
+  CREATE INDEX match_stats_player ON match_stats(player_id);
+  UPDATE matches SET closed_at = starts_at WHERE result != '';
+  `,
 ];
 
 mkdirSync(dirname(config.dbPath), { recursive: true });

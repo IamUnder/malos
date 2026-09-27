@@ -1,7 +1,7 @@
 // Datos de ejemplo para desarrollo local: `npm run seed:demo`.
 // No lo ejecutes en producción: la plantilla real se da de alta desde /admin/jugadores.
 import { db } from '../src/db.js';
-import { createMember, verifyMember, saveMatch, createPost, listPlayers, stats } from '../src/data.js';
+import { createMember, verifyMember, saveMatch, createPost, listPlayers, stats, getMatch, saveMatchStats, castVote, memberById } from '../src/data.js';
 import { seedRoster } from '../src/roster.js';
 
 if (process.env.NODE_ENV === 'production') {
@@ -17,9 +17,12 @@ seedRoster();
 const players = listPlayers();
 
 const day = 86400e3;
-saveMatch({ startsAt: new Date(Date.now() + 2 * day), opponent: 'Rival de ejemplo', competition: 'Liga UCLM · Jornada 3', game: 'lol', streamUrl: 'https://www.twitch.tv/' });
+const nextId = saveMatch({ startsAt: new Date(Date.now() + 2 * day), opponent: 'Rival de ejemplo', competition: 'Liga UCLM · Jornada 3', game: 'lol', streamUrl: 'https://www.twitch.tv/' });
 saveMatch({ startsAt: new Date(Date.now() + 9 * day), opponent: 'Otro rival', competition: 'Liga UCLM · Jornada 4', game: 'lol' });
-saveMatch({ startsAt: new Date(Date.now() - 5 * day), opponent: 'Rival pasado', competition: 'Liga UCLM · Jornada 2', game: 'lol', result: '2-1' });
+const pastId = saveMatch({ startsAt: new Date(Date.now() - 2 * day), opponent: 'Rival pasado', competition: 'Liga UCLM · Jornada 2', game: 'lol', result: '2-1' });
+// KDA de ejemplo del partido pasado (mismo orden que la plantilla: top, jungla, mid, adc, support)
+const kda = [['Ornn', 3, 4, 11], ['Viego', 7, 2, 9], ['Sylas', 9, 3, 6], ['Jinx', 11, 1, 5], ['Thresh', 1, 5, 18]];
+saveMatchStats(pastId, kda.map(([champion, kills, deaths, assists], i) => ({ playerId: players[i].id, champion, kills, deaths, assists })));
 
 createPost({ title: 'Arranca la web de socios', body: 'Ya puedes hacerte socio de Malos: número de socio, avisos de los partidos y vota a tu jugador favorito.\n\n(Noticia de ejemplo)' });
 
@@ -32,6 +35,17 @@ weights.forEach((count, i) => {
     verifyMember(member);
   }
 });
+// Votos de ejemplo: predicción del próximo partido y veredicto del pasado.
+const all = db.prepare('SELECT id FROM members').all().map((r) => memberById(r.id));
+const pick = (i, k) => players[(i * 7 + k) % players.length].id;
+all.forEach((member, i) => {
+  const mvp = pick(i, 1);
+  let fraud = pick(i, 3);
+  if (fraud === mvp) fraud = players[(players.findIndex((p) => p.id === mvp) + 1) % players.length].id;
+  castVote({ match: getMatch(nextId), member, phase: 'pre', mvpId: mvp, fraudId: fraud });
+  if (i % 3) castVote({ match: getMatch(pastId), member, phase: 'post', mvpId: i % 2 ? players[3].id : players[1].id, fraudId: players[4].id });
+});
+
 // El primer socio, con el favorito cambiado hace tiempo, para probar el cambio de favorito.
 db.prepare('UPDATE members SET favorite_changed_at = ? WHERE number = 1').run(new Date(Date.now() - 60 * day).toISOString());
 

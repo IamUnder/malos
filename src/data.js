@@ -53,14 +53,121 @@ export const upcomingMatches = (limit = 5) =>
 export const recentResults = (limit = 5) =>
   db.prepare("SELECT * FROM matches WHERE result != '' ORDER BY starts_at DESC LIMIT ?").all(limit);
 
-export const listMatches = (limit = 50) => db.prepare('SELECT * FROM matches ORDER BY starts_at DESC LIMIT ?').all(limit);
+export const listMatches = (limit = 50) =>
+  db.prepare('SELECT m.*, (SELECT COUNT(*) FROM match_stats s WHERE s.match_id = m.id) AS stats_count FROM matches m ORDER BY starts_at DESC LIMIT ?').all(limit);
 export const getMatch = (id) => db.prepare('SELECT * FROM matches WHERE id = ?').get(id);
 export const deleteMatch = (id) => db.prepare('DELETE FROM matches WHERE id = ?').run(id);
 
 export function saveMatch({ id, startsAt, opponent, competition, game, streamUrl, result }) {
-  const values = [startsAt.toISOString(), opponent, competition || '', game || 'lol', streamUrl || '', result || ''];
-  if (id) db.prepare('UPDATE matches SET starts_at=?, opponent=?, competition=?, game=?, stream_url=?, result=? WHERE id=?').run(...values, id);
-  else db.prepare('INSERT INTO matches (starts_at, opponent, competition, game, stream_url, result) VALUES (?,?,?,?,?,?)').run(...values);
+  result = result || '';
+  const before = id ? getMatch(id) : null;
+  // closed_at marca cuándo se cerró el partido (se puso resultado): abre la votación de confirmación.
+  const closedAt = !result ? null : before?.result ? before.closed_at : now();
+  const values = [startsAt.toISOString(), opponent, competition || '', game || 'lol', streamUrl || '', result, closedAt];
+  if (id) {
+    db.prepare('UPDATE matches SET starts_at=?, opponent=?, competition=?, game=?, stream_url=?, result=?, closed_at=? WHERE id=?').run(...values, id);
+    return id;
+  }
+  return Number(db.prepare('INSERT INTO matches (starts_at, opponent, competition, game, stream_url, result, closed_at) VALUES (?,?,?,?,?,?,?)').run(...values).lastInsertRowid);
+}
+
+export const lastPlayedMatch = () => db.prepare("SELECT * FROM matches WHERE result != '' ORDER BY starts_at DESC LIMIT 1").get();
+
+// ---------- MVP y fraude ----------
+//
+// Dos votaciones por partido y socio: la predicción ("pre", hasta que empieza el partido) y la
+// confirmación ("post", desde que se pone el resultado y durante VOTE_POST_DAYS días). Se puede
+// cambiar el voto mientras la votación está abierta. MVP y fraude no pueden ser el mismo jugador.
+
+export const VOTE_POST_DAYS = 7;
+
+/** 'pre', 'post' o null (en juego, o votación ya cerrada). */
+export function votePhase(match, at = Date.now()) {
+  if (!match.result) return at < new Date(match.starts_at).getTime() ? 'pre' : null;
+  const closed = new Date(match.closed_at || match.starts_at).getTime();
+  return at < closed + VOTE_POST_DAYS * 86400e3 ? 'post' : null;
+}
+
+/** A quién se puede votar: quienes jugaron (si ya hay estadísticas) o la plantilla activa de ese juego. */
+export function voteCandidates(match) {
+  const played = db.prepare(`
+    SELECT p.* FROM match_stats s JOIN players p ON p.id = s.player_id WHERE s.match_id = ? ORDER BY p.sort, p.nick
+  `).all(match.id);
+  if (played.length) return played;
+  return db.prepare('SELECT * FROM players WHERE active = 1 AND game = ? ORDER BY sort, nick COLLATE NOCASE').all(match.game);
+}
+
+export function castVote({ match, member, phase, mvpId, fraudId }) {
+  db.prepare(`
+    INSERT INTO match_votes (match_id, member_id, phase, mvp_id, fraud_id, voted_at) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(match_id, member_id, phase) DO UPDATE SET mvp_id = excluded.mvp_id, fraud_id = excluded.fraud_id, voted_at = excluded.voted_at
+  `).run(match.id, member.id, phase, mvpId, fraudId, now());
+}
+
+export function memberVotes(matchId, memberId) {
+  const rows = db.prepare('SELECT * FROM match_votes WHERE match_id = ? AND member_id = ?').all(matchId, memberId);
+  return Object.fromEntries(rows.map((r) => [r.phase, r]));
+}
+
+/** Recuento de una votación: { total, mvp: [{player, votes, share}], fraud: [...] }, de más a menos votos. */
+export function voteTally(matchId, phase) {
+  const count = (column) => db.prepare(`
+    SELECT p.*, COUNT(*) AS votes FROM match_votes v JOIN players p ON p.id = v.${column}
+    WHERE v.match_id = ? AND v.phase = ? GROUP BY p.id ORDER BY votes DESC, p.sort
+  `).all(matchId, phase);
+  const { total } = db.prepare('SELECT COUNT(*) AS total FROM match_votes WHERE match_id = ? AND phase = ?').get(matchId, phase);
+  const withShare = (rows) => rows.map((r) => ({ ...r, share: total ? r.votes / total : 0 }));
+  return { total, mvp: withShare(count('mvp_id')), fraud: withShare(count('fraud_id')) };
+}
+
+/** Ganadores (con empates) de una lista de recuento. */
+export const winners = (rows) => (rows.length ? rows.filter((r) => r.votes === rows[0].votes) : []);
+
+// ---------- Estadísticas (KDA) ----------
+
+export function matchStats(matchId) {
+  return db.prepare(`
+    SELECT s.*, p.nick, p.name, p.role, p.champions AS player_champions, p.sort
+    FROM match_stats s JOIN players p ON p.id = s.player_id
+    WHERE s.match_id = ? ORDER BY p.sort, p.nick
+  `).all(matchId);
+}
+
+/** Sustituye las estadísticas del partido por `rows` ([{playerId, champion, kills, deaths, assists}]). */
+export function saveMatchStats(matchId, rows) {
+  tx(() => {
+    db.prepare('DELETE FROM match_stats WHERE match_id = ?').run(matchId);
+    const insert = db.prepare('INSERT INTO match_stats (match_id, player_id, champion, kills, deaths, assists) VALUES (?,?,?,?,?,?)');
+    for (const r of rows) insert.run(matchId, r.playerId, r.champion || '', r.kills, r.deaths, r.assists);
+  });
+}
+
+export const kdaRatio = (k, d, a) => (k + a) / Math.max(1, d);
+
+/**
+ * Estadísticas acumuladas por jugador: partidos, K/D/A totales, KDA medio y cuántas veces la afición
+ * le ha confirmado como MVP o como fraude (votación de confirmación; los empates cuentan para todos).
+ */
+export function seasonStats(game = 'lol') {
+  const rows = db.prepare(`
+    SELECT p.*, COUNT(s.match_id) AS games,
+      COALESCE(SUM(s.kills), 0) AS kills, COALESCE(SUM(s.deaths), 0) AS deaths, COALESCE(SUM(s.assists), 0) AS assists
+    FROM players p LEFT JOIN match_stats s ON s.player_id = p.id
+    WHERE p.game = ? AND (p.active = 1 OR s.match_id IS NOT NULL)
+    GROUP BY p.id
+  `).all(game);
+
+  const awards = new Map(rows.map((r) => [r.id, { mvp: 0, fraud: 0 }]));
+  const closed = db.prepare("SELECT id FROM matches WHERE game = ? AND result != ''").all(game);
+  for (const { id } of closed) {
+    const tally = voteTally(id, 'post');
+    for (const w of winners(tally.mvp)) if (awards.has(w.id)) awards.get(w.id).mvp++;
+    for (const w of winners(tally.fraud)) if (awards.has(w.id)) awards.get(w.id).fraud++;
+  }
+
+  return rows
+    .map((r) => ({ ...r, ...awards.get(r.id), kda: kdaRatio(r.kills, r.deaths, r.assists) }))
+    .sort((a, b) => (b.games > 0) - (a.games > 0) || b.kda - a.kda || a.sort - b.sort);
 }
 
 export const listPosts = (limit = 10) => db.prepare('SELECT * FROM posts ORDER BY created_at DESC LIMIT ?').all(limit);

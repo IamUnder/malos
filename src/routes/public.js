@@ -4,7 +4,9 @@ import * as data from '../data.js';
 import { sendAccessLink } from '../lib/mail.js';
 import { tooMany, turnstileOk } from '../lib/guard.js';
 import { memberCheckCode, memberCheckPath, safeEqual } from '../lib/auth.js';
+import { currentMember, forgetMember, rememberMember } from '../lib/member-session.js';
 import * as views from '../views/public.js';
+import * as matchView from '../views/match.js';
 import { privacy, legalNotice } from '../views/legal.js';
 
 export const publicRoutes = new Hono();
@@ -24,18 +26,65 @@ const FLASH = {
   bloqueado: { kind: 'error', message: 'Todavía no puedes cambiar de favorito.' },
 };
 
-publicRoutes.get('/', (c) => c.html(views.homePage({
-  stats: data.stats(),
-  match: data.nextMatch(),
-  rank: data.ranking(),
-  players: data.listPlayers(),
-  posts: data.listPosts(3),
-  upcoming: data.upcomingMatches(4),
-})));
+publicRoutes.get('/', (c) => {
+  const played = data.lastPlayedMatch();
+  return c.html(views.homePage({
+    stats: data.stats(),
+    match: data.nextMatch(),
+    rank: data.ranking(),
+    players: data.listPlayers(),
+    posts: data.listPosts(3),
+    upcoming: data.upcomingMatches(4),
+    season: data.seasonStats('lol'),
+    last: played ? { match: played, stats: data.matchStats(played.id), postTally: data.voteTally(played.id, 'post') } : {},
+  }));
+});
 
 publicRoutes.get('/plantilla', (c) => c.html(views.rosterPage({ players: data.listPlayers() })));
 publicRoutes.get('/ranking', (c) => c.html(views.rankingPage({ rank: data.ranking() })));
 publicRoutes.get('/partidos', (c) => c.html(views.matchesPage({ upcoming: data.upcomingMatches(20), results: data.recentResults(20) })));
+const VOTE_FLASH = {
+  votado: { kind: 'ok', message: '¡Voto guardado! Puedes cambiarlo mientras la votación siga abierta.' },
+  igual: { kind: 'error', message: 'El MVP y el fraude no pueden ser el mismo jugador.' },
+  cerrada: { kind: 'error', message: 'Esta votación ya está cerrada.' },
+  socio: { kind: 'error', message: 'Para votar tienes que ser socio. Entra desde el enlace de tu email.' },
+};
+
+publicRoutes.get('/partidos/:id{[0-9]+}', (c) => {
+  const match = data.getMatch(Number(c.req.param('id')));
+  if (!match) return c.notFound();
+  const member = currentMember(c);
+  return c.html(matchView.matchPage({
+    match,
+    phase: data.votePhase(match),
+    candidates: data.voteCandidates(match),
+    member,
+    myVotes: member ? data.memberVotes(match.id, member.id) : {},
+    preTally: data.voteTally(match.id, 'pre'),
+    postTally: data.voteTally(match.id, 'post'),
+    stats: data.matchStats(match.id),
+    flash: VOTE_FLASH[c.req.query('ok')],
+  }));
+});
+
+publicRoutes.post('/partidos/:id{[0-9]+}/votar', async (c) => {
+  const match = data.getMatch(Number(c.req.param('id')));
+  if (!match) return c.notFound();
+  const back = (key) => c.redirect(`/partidos/${match.id}?ok=${key}#votar`);
+  const member = currentMember(c);
+  if (!member) return back('socio');
+  const form = await c.req.parseBody();
+  const phase = data.votePhase(match);
+  if (!phase || form.phase !== phase) return back('cerrada');
+  const allowed = new Set(data.voteCandidates(match).map((p) => p.id));
+  const mvpId = Number(form.mvp);
+  const fraudId = Number(form.fraud);
+  if (!allowed.has(mvpId) || !allowed.has(fraudId)) return c.redirect(`/partidos/${match.id}`);
+  if (mvpId === fraudId) return back('igual');
+  data.castVote({ match, member, phase, mvpId, fraudId });
+  return back('votado');
+});
+
 publicRoutes.get('/noticias', (c) => c.html(views.newsPage({ posts: data.listPosts(50) })));
 publicRoutes.get('/privacidad', (c) => c.html(views.legalPage({ title: 'Privacidad', path: '/privacidad', content: privacy })));
 publicRoutes.get('/aviso-legal', (c) => c.html(views.legalPage({ title: 'Aviso legal', path: '/aviso-legal', content: legalNotice })));
@@ -75,7 +124,13 @@ publicRoutes.post('/hazte-socio', async (c) => {
 
 // ---------- Recuperar el enlace ----------
 
-publicRoutes.get('/mi-tarjeta', (c) => c.html(views.recoverPage({})));
+publicRoutes.get('/mi-tarjeta', (c) => {
+  const member = currentMember(c);
+  if (member) return c.redirect(`/socio/${member.access_token}`);
+  return c.html(views.recoverPage({}));
+});
+
+publicRoutes.post('/olvidar-dispositivo', (c) => { forgetMember(c); return c.redirect('/'); });
 
 publicRoutes.post('/mi-tarjeta', async (c) => {
   const { email } = await c.req.parseBody();
@@ -97,6 +152,7 @@ publicRoutes.get('/socio/:token', (c) => {
   if (!member) return c.notFound();
   const justVerified = !member.verified_at;
   member = data.verifyMember(member);
+  rememberMember(c, member);
 
   const favorite = member.favorite_player_id ? data.getPlayer(member.favorite_player_id) : null;
   // Si su favorito ya no está en la plantilla, puede elegir otro sin esperar.
@@ -134,6 +190,7 @@ publicRoutes.post('/socio/:token/baja', async (c) => {
   const { confirm } = await c.req.parseBody();
   if (!confirm) return c.redirect(`/socio/${member.access_token}`);
   data.deleteMember(member.id);
+  forgetMember(c);
   return c.html(views.goodbyePage());
 });
 

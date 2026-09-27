@@ -103,7 +103,9 @@ p { margin: 0; }
 .matchbar .vs { font: 900 clamp(1.6rem, 4vw, 2.3rem)/1 var(--display); text-transform: uppercase; }
 .matchbar .vs span { color: var(--mostaza); }
 .matchbar .when { font-family: var(--mono); font-size: .95rem; }
-.matchbar .btn { margin-left: auto; background: var(--mostaza); color: var(--tinta); border-color: var(--mostaza); box-shadow: none; font-size: 1.05rem; padding: 10px 16px; }
+.matchbar-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto; }
+.matchbar .btn.ghost-light { background: transparent; color: var(--hueso); border-color: var(--hueso); }
+.matchbar .btn { background: var(--mostaza); color: var(--tinta); border-color: var(--mostaza); box-shadow: none; font-size: 1.05rem; padding: 10px 16px; }
 .live { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 3px; background: var(--rojo-l); color: #fff; font: 700 .72rem/1 var(--mono); letter-spacing: .12em; }
 .live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .25; } }
@@ -157,7 +159,8 @@ p { margin: 0; }
 .fixtures li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--linea); }
 .fixtures .date { font: 700 .8rem/1.2 var(--mono); text-align: center; min-width: 4.5ch; text-transform: uppercase; }
 .fixtures .date b { display: block; font-size: 1.4rem; }
-.fixtures .opp { font: 900 1.4rem/1 var(--display); text-transform: uppercase; }
+.fixtures .opp { font: 900 1.4rem/1 var(--display); text-transform: uppercase; text-decoration: none; }
+.fixtures .opp:hover { text-decoration: underline; text-underline-offset: 3px; }
 .fixtures .comp { font-size: .85rem; color: var(--gris); }
 .fixtures .res { font: 700 1.1rem/1 var(--mono); }
 
@@ -262,7 +265,7 @@ td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .cols { grid-template-columns: 1fr; }
   .support .wrap { grid-template-columns: 1fr; }
   .support .l-plate { font-size: 3rem; }
-  .matchbar .btn { margin-left: 0; }
+  .matchbar-actions { margin-left: 0; }
   .grid-2 { grid-template-columns: 1fr; }
   .top .wrap { gap: 12px; }
   .nav { flex-wrap: nowrap; overflow-x: auto; gap: 14px; font-size: .88rem; padding-block: 8px; scrollbar-width: none; }
@@ -275,3 +278,39 @@ td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Partido: votaciones y marcador ---------- */
+.match-head { background: var(--tinta); color: var(--hueso); padding-block: 40px 36px; }
+.match-head h1 { font-size: clamp(2.6rem, 7vw, 5rem); }
+.match-head h1 span { color: var(--mostaza); }
+.match-head .pill { background: var(--tinta-2); color: var(--hueso); }
+.match-head .pill.ok { background: var(--mostaza); color: var(--tinta); }
+.verdict { font-size: 1.1rem; }
+.verdict b { color: var(--mostaza); font-family: var(--display); font-size: 1.4em; text-transform: uppercase; }
+.narrow.wide { width: min(100% - 32px, 820px); }
+.tally { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tally li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 10px; }
+.tally .avatar { grid-row: span 2; }
+.tally-nick { font: 900 1.2rem/1 var(--display); text-transform: uppercase; }
+.tally-votes { font-size: .8rem; color: var(--gris); }
+.tally .bar { grid-column: 2 / -1; height: 6px; background: rgba(20, 18, 12, .1); border-radius: 3px; overflow: hidden; }
+.tally .bar i { display: block; height: 100%; border-radius: 3px; }
+.tally-mvp .bar i { background: var(--mostaza-hondo); }
+.tally-fraud .bar i { background: var(--rojo-l); }
+.player-cell, .champ-cell { display: inline-flex; align-items: center; gap: 10px; }
+.champ-cell img { border-radius: 50%; border: 2px solid var(--tinta); }
+.player-cell .avatar { border-width: 2px; }
+table.season td, table.scoreboard td { white-space: nowrap; }
+
+/* ---------- Portada: último partido ---------- */
+.last-match { display: grid; gap: 10px; padding: 22px; border: 2px solid var(--tinta); border-radius: var(--radius); background: var(--tinta); color: var(--hueso); text-decoration: none; box-shadow: 4px 4px 0 var(--mostaza-hondo); }
+.last-match .eyebrow { color: var(--mostaza); }
+.lm-score { font: 900 clamp(1.8rem, 4vw, 2.6rem)/1 var(--display); text-transform: uppercase; }
+.lm-score b { color: var(--mostaza); }
+.last-match dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0; }
+.last-match dt { font: 700 .68rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; opacity: .7; margin-bottom: 4px; }
+.last-match dd { margin: 0; font: 800 1.15rem/1.1 var(--display); text-transform: uppercase; }
+.lm-link { font-weight: 700; color: var(--mostaza); }
+.last-match:hover .lm-link { text-decoration: underline; }
+.stats-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 28px; align-items: start; }
+@media (max-width: 800px) { .stats-cols { grid-template-columns: 1fr; } }
