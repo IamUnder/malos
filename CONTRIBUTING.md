@@ -8,6 +8,7 @@
 2. Haz un fork y crea una rama: `git checkout -b arreglo/lo-que-sea`.
 3. Comprueba que `npm test` pasa y que la web funciona en local (`npm run dev`).
 4. Abre un *pull request* explicando qué cambia y cómo lo has probado. Si toca algo visual, añade una captura.
+5. El CI pasa los tests y construye la imagen. Cuando se aprueba y se fusiona en `main`, se despliega en malos.es: no hay entorno intermedio, así que **todo lo que entra en `main` va a producción**.
 
 ## Principios del proyecto
 
@@ -15,6 +16,7 @@
 - **Datos mínimos.** No se piden más datos personales de los necesarios. Cualquier dato nuevo de los socios tiene que actualizar también la política de privacidad (`src/views/legal.js`).
 - **Todo en español**, tanto los textos de la web como los comentarios del código.
 - **Los cambios de base de datos van como migración nueva** al final del array de `src/db.js`. Nunca se edita una migración que ya está publicada.
+- **Nada de avisos de más.** Los avisos push y de Google Wallet son pocos a propósito: no se añaden avisos automáticos (recordatorios, etc.) sin hablarlo antes en un issue.
 - **Todo lo opcional tiene que poder desactivarse.** Si falta una variable de entorno, la web sigue funcionando sin esa parte.
 
 ## Estilo de código

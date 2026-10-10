@@ -1,0 +1,21 @@
+name: Algo no funciona
+description: Un fallo en malos.es o en el código
+labels: [fallo]
+body:
+  - type: textarea
+    attributes:
+      label: Qué ha pasado
+      description: Qué hacías, qué esperabas y qué ha salido. Si puedes, añade una captura.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Página
+      placeholder: https://malos.es/...
+  - type: input
+    attributes:
+      label: Móvil o navegador
+      placeholder: Android + Chrome, iPhone + Safari, PC + Firefox...
+  - type: markdown
+    attributes:
+      value: "⚠️ No pegues aquí tu enlace de carné (/socio/...) ni tu email: el repositorio es público."

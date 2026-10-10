@@ -1,0 +1,19 @@
+name: Idea o mejora
+description: Algo que le falta a la web
+labels: [idea]
+body:
+  - type: textarea
+    attributes:
+      label: Qué propones
+      description: Cuéntalo desde el punto de vista del socio o del equipo, no hace falta saber programar.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Para qué sirve
+      description: Qué problema resuelve o por qué la usaría la afición.
+  - type: checkboxes
+    attributes:
+      label: Me apunto
+      options:
+        - label: Me gustaría programarlo yo (te ayudamos a empezar)

@@ -6,17 +6,12 @@ Guía para quien despliega (Jorge o la sesión de PortLedger). Sigue el mismo pa
 
 | Entorno | Carpeta | Hostname | `COMPOSE_PROJECT_NAME` = `WEB_ALIAS` | `TUNNEL_NETWORK` | `TEST_MODE` |
 |---|---|---|---|---|---|
-| Pruebas (actual) | `/home/under/malos-web-test` | `malos.es` y `test.kaizogroup.es` | `malos-web-test` | `malos-web-test-net` | `true` |
-| Producción (en el lanzamiento) | `/home/under/malos-web` | `malos.es` | `malos-web` | `malos-web-net` | `false` |
+| Producción | `/home/under/malos-web-test` (nombre heredado de la fase de pruebas) | `malos.es` | `malos-web-test` | `malos-web-test-net` | `false` |
 
-De momento `malos.es` apunta al entorno de pruebas (con `SITE_URL=https://malos.es` y `TEST_MODE=true`), hasta la presentación oficial.
-El túnel que sirve estos dominios es `kaizenfit-tunnel`; `kaizogroup-tunnel` no se usa.
+`malos.es` está **en producción** desde el 10-10-2026. El túnel que sirve el dominio es `kaizenfit-tunnel` (`kaizogroup-tunnel` no se usa).
+Si algún día se monta un entorno de pruebas aparte, que use su propia carpeta, su propio `.env` con `TEST_MODE=true` y **claves VAPID, `SESSION_SECRET` y base de datos distintos**.
 
-**Lanzamiento:** basta con poner `TEST_MODE=false` y recrear el contenedor. Antes, borra los socios de prueba y reinicia la numeración (jugadores, partidos y noticias se conservan):
-```bash
-docker compose exec web node scripts/reset-members.js            # dice cuántos borraría
-docker compose exec web node scripts/reset-members.js --confirmo  # los borra; el siguiente socio es el #0001
-```
+`scripts/reset-members.js` (borra todos los socios y reinicia la numeración) fue para el lanzamiento. **No ejecutarlo en producción.**
 
 Con `TEST_MODE=true` la web no se indexa, enseña una franja roja de "entorno de pruebas" y, mientras no haya SMTP, muestra el enlace de confirmación en pantalla. Así se puede probar el alta sin email. **Nunca en producción.**
 Pruebas y producción tienen que usar **claves VAPID y `SESSION_SECRET` distintos**.
