@@ -5,6 +5,7 @@ import { sendAccessLink } from '../lib/mail.js';
 import { tooMany, turnstileOk } from '../lib/guard.js';
 import { memberCheckCode, memberCheckPath, safeEqual } from '../lib/auth.js';
 import { currentMember, forgetMember, rememberMember } from '../lib/member-session.js';
+import * as gwallet from '../lib/google-wallet.js';
 import * as views from '../views/public.js';
 import * as matchView from '../views/match.js';
 import { privacy, legalNotice } from '../views/legal.js';
@@ -189,6 +190,7 @@ publicRoutes.get('/socio/:token', (c) => {
     flash: FLASH[c.req.query('ok')] || FLASH[c.req.query('error')],
     checkPath: memberCheckPath(member),
     oracle: data.oracleStandings().find((r) => r.member_id === member.id) || null,
+    googleWallet: gwallet.enabled,
   }));
 });
 
@@ -201,8 +203,21 @@ publicRoutes.post('/socio/:token/favorito', async (c) => {
   const back = `/socio/${member.access_token}`;
   if (!player?.active) return c.redirect(back);
   if (current?.active && data.favoriteLockedUntil(member)) return c.redirect(`${back}?error=bloqueado`);
-  if (player.id !== member.favorite_player_id) data.changeFavorite(member, player.id);
+  if (player.id !== member.favorite_player_id) {
+    data.changeFavorite(member, player.id);
+    gwallet.inBackground(gwallet.updateMember(member, player), 'actualizar favorito');
+  }
   return c.redirect(`${back}?ok=favorito`);
+});
+
+// "Añadir a Google Wallet": genera el enlace firmado en el momento y redirige a Google.
+publicRoutes.get('/socio/:token/google-wallet', (c) => {
+  const member = loadMember(c);
+  if (!member?.verified_at || !gwallet.enabled) return c.notFound();
+  const favorite = member.favorite_player_id ? data.getPlayer(member.favorite_player_id) : null;
+  c.header('Cache-Control', 'no-store');
+  c.header('Referrer-Policy', 'no-referrer');
+  return c.redirect(gwallet.saveUrl(member, favorite));
 });
 
 publicRoutes.post('/socio/:token/oraculo', async (c) => {
@@ -218,6 +233,7 @@ publicRoutes.post('/socio/:token/baja', async (c) => {
   if (!member) return c.notFound();
   const { confirm } = await c.req.parseBody();
   if (!confirm) return c.redirect(`/socio/${member.access_token}`);
+  gwallet.inBackground(gwallet.expireMember(member), 'caducar tarjeta');
   data.deleteMember(member.id);
   forgetMember(c);
   return c.html(views.goodbyePage());

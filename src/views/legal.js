@@ -39,6 +39,7 @@ export const privacy = `
   <li>Cloudflare, que hace llegar el tráfico a la web.</li>
   <li>El servicio de email que envía los mensajes de confirmación.</li>
   <li>El servicio de notificaciones de tu navegador (Google, Apple o Mozilla), solo si activas los avisos. Solo recibe el texto del aviso.</li>
+  <li>Google Wallet, solo si añades tu carné a Google Wallet: recibe tu nick, número de socio, jugador favorito y fecha de alta para mostrar la tarjeta en tu móvil.</li>
 </ul>
 
 <h2>Tus derechos</h2>

@@ -6,6 +6,10 @@ import { tooMany } from '../lib/guard.js';
 import { fromLocalInput, pad } from '../lib/format.js';
 import * as views from '../views/admin.js';
 import { resolveChampion, resolveChampions } from '../lib/champions.js';
+import * as gwallet from '../lib/google-wallet.js';
+
+// El próximo partido sale en todas las tarjetas de Google Wallet: se actualiza al tocar partidos.
+const syncWalletMatch = () => gwallet.inBackground(gwallet.syncClass(data.nextMatch()), 'actualizar próximo partido');
 
 export const adminRoutes = new Hono();
 
@@ -28,7 +32,7 @@ adminRoutes.use('*', requireAdmin);
 
 // Mensajes tras una acción: ?ok=<clave>
 const FLASH = {
-  publicado: (q) => ({ kind: 'ok', message: q.enviados ? `Publicado. Aviso enviado a ${q.enviados} dispositivos${Number(q.fallidos) ? ` (${q.fallidos} fallidos)` : ''}.` : 'Publicado en la web.' }),
+  publicado: (q) => ({ kind: 'ok', message: `${q.enviados ? `Publicado. Aviso enviado a ${q.enviados} dispositivos${Number(q.fallidos) ? ` (${q.fallidos} fallidos)` : ''}.` : 'Publicado en la web.'}${q.wallet ? ' También enviado a las tarjetas de Google Wallet.' : ''}` }),
   borrado: () => ({ kind: 'ok', message: 'Borrado.' }),
   guardado: (q) => ({ kind: 'ok', message: `Guardado.${q.enviados ? ` Aviso enviado a ${q.enviados} dispositivos.` : ''}` }),
   formato: () => ({ kind: 'error', message: 'Guardado, pero el resultado debería tener el formato 2-1 (Malos primero). Si no, la porra no puede puntuar el marcador.' }),
@@ -56,7 +60,9 @@ adminRoutes.post('/avisos', async (c) => {
   if (!form.push) return c.redirect('/admin/avisos?ok=publicado');
   const { sent, failed } = await broadcast({ title, body: body.slice(0, 180), url: `/noticias#n${post.id}` });
   data.markPostPushed(post.id, sent);
-  return c.redirect(`/admin/avisos?ok=publicado&enviados=${sent}&fallidos=${failed}`);
+  // El mismo aviso, a las tarjetas de Google Wallet (una sola llamada para todas).
+  const wallet = await gwallet.broadcastMessage({ title, body }).catch((err) => { console.error('[google-wallet] aviso:', err.message); return false; });
+  return c.redirect(`/admin/avisos?ok=publicado&enviados=${sent}&fallidos=${failed}${wallet ? '&wallet=1' : ''}`);
 });
 
 adminRoutes.post('/avisos/:id/borrar', (c) => { data.deletePost(Number(c.req.param('id'))); return c.redirect('/admin/avisos?ok=borrado'); });
@@ -84,6 +90,7 @@ adminRoutes.post('/partidos', async (c) => {
     result,
     bestOf: f.bestOf,
   });
+  syncWalletMatch();
   // Un resultado que no es "N-M" se guarda, pero no puntúa en la porra: se avisa.
   if (result && !data.parseScore(result)) return c.redirect(`/admin/partidos?editar=${id}&ok=formato`);
   let pushed = '';
@@ -134,7 +141,11 @@ adminRoutes.post('/partidos/:id/estadisticas', async (c) => {
   return c.redirect(`${base}?ok=guardado`);
 });
 
-adminRoutes.post('/partidos/:id/borrar', (c) => { data.deleteMatch(Number(c.req.param('id'))); return c.redirect('/admin/partidos?ok=borrado'); });
+adminRoutes.post('/partidos/:id/borrar', (c) => {
+  data.deleteMatch(Number(c.req.param('id')));
+  syncWalletMatch();
+  return c.redirect('/admin/partidos?ok=borrado');
+});
 
 // ---------- Jugadores ----------
 
@@ -172,7 +183,12 @@ adminRoutes.get('/socios', (c) => {
   return c.html(views.membersAdminPage({ members: data.listMembers({ q, limit: 500 }), q, flash: flashOf(c) }));
 });
 
-adminRoutes.post('/socios/:id/borrar', (c) => { data.deleteMember(c.req.param('id')); return c.redirect('/admin/socios?ok=borrado'); });
+adminRoutes.post('/socios/:id/borrar', (c) => {
+  const member = data.memberById(c.req.param('id'));
+  if (member) gwallet.inBackground(gwallet.expireMember(member), 'caducar tarjeta');
+  data.deleteMember(c.req.param('id'));
+  return c.redirect('/admin/socios?ok=borrado');
+});
 
 adminRoutes.get('/socios.csv', (c) => {
   const cell = (v) => {

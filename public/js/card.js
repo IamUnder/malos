@@ -1,3 +1,8 @@
+// Google Wallet no existe en iPhone: allí se oculta el botón "Añadir a Google Wallet".
+if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+  document.querySelectorAll('[data-android-only]').forEach((el) => { el.hidden = true; });
+}
+
 // Activar y desactivar los avisos push desde la página del carné.
 (async () => {
   const box = document.getElementById('avisos');

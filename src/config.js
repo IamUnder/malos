@@ -37,6 +37,11 @@ export const config = {
     privateKey: env.VAPID_PRIVATE_KEY || '',
     subject: env.VAPID_SUBJECT || 'mailto:hola@malos.es',
   },
+  // Google Wallet: ID de emisor (Wallet Console) y JSON de la cuenta de servicio (fuera de git, en secrets/).
+  googleWallet: {
+    issuerId: env.GOOGLE_WALLET_ISSUER_ID || '',
+    keyFile: env.GOOGLE_WALLET_KEY_FILE || './secrets/google-wallet.json',
+  },
   turnstile: {
     siteKey: env.TURNSTILE_SITE_KEY || '',
     secret: env.TURNSTILE_SECRET || '',

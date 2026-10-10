@@ -10,6 +10,8 @@ services:
     env_file: .env
     volumes:
       - data:/app/data
+      # Clave de la cuenta de servicio de Google Wallet (fuera de git): ./secrets/google-wallet.json
+      - ./secrets:/app/secrets:ro
     mem_limit: 192m
     networks:
       tunnel:

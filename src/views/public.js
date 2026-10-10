@@ -204,7 +204,7 @@ export function recoverPage({ sent, error, devLink }) {
   });
 }
 
-export function cardPage({ member, favorite, players, lockedUntil, pushCount, justVerified, flash, checkPath, oracle }) {
+export function cardPage({ member, favorite, players, lockedUntil, pushCount, justVerified, flash, checkPath, oracle, googleWallet }) {
   const verified = Boolean(member.verified_at);
   const body = html`<div class="narrow">
     ${justVerified ? alert('ok', `¡Dentro! Eres el socio número ${member.number}.`) : ''}
@@ -216,6 +216,8 @@ export function cardPage({ member, favorite, players, lockedUntil, pushCount, ju
       data-number="${pad(member.number)}" data-nick="${member.nick}" data-favorite="${favorite?.nick ?? ''}"
       data-champ="${favorite ? (championIcon(parseChampions(favorite.champions)[0] || '') || '') : ''}"
       data-since="${formatDate(member.verified_at, { month: 'long', year: 'numeric' })}" data-site="${config.siteUrl.replace(/^https?:\/\//, '')}">
+      ${googleWallet ? html`<a class="gwallet-btn" href="/socio/${member.access_token}/google-wallet" data-android-only>
+        <img src="/img/google-wallet-es.svg" alt="Añadir a Google Wallet" width="199" height="55"></a>` : ''}
       <button class="btn share-btn" type="button">Compartir mi carné</button>
       <p class="muted share-hint">Genera una imagen para tus stories con tu número de socio.</p>
     </div>

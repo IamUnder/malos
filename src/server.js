@@ -3,7 +3,8 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { config } from './config.js';
-import { purgeUnverified } from './data.js';
+import { nextMatch, purgeUnverified } from './data.js';
+import * as gwallet from './lib/google-wallet.js';
 import { seedRoster } from './roster.js';
 import { publicRoutes } from './routes/public.js';
 import { adminRoutes } from './routes/admin.js';
@@ -45,6 +46,9 @@ app.onError((err, c) => {
 
 seedRoster();
 
+// Deja la clase de Google Wallet al día (próximo partido) al arrancar.
+gwallet.inBackground(gwallet.syncClass(nextMatch()), 'sincronizar clase');
+
 // Limpieza diaria de altas sin confirmar (más de 7 días).
 const purge = () => { const n = purgeUnverified(); if (n) console.log(`[db] ${n} altas sin confirmar borradas`); };
 purge();
@@ -54,6 +58,7 @@ const server = serve({ fetch: app.fetch, port: config.port }, ({ port }) => {
   console.log(`Malos escuchando en http://localhost:${port} (${config.testMode ? 'pruebas' : config.isProd ? 'producción' : 'desarrollo'})`);
   if (!config.push.enabled) console.log('  · avisos push desactivados (faltan claves VAPID)');
   if (!config.mail.enabled) console.log('  · sin SMTP: los enlaces de confirmación salen por esta consola');
+  console.log(`  · Google Wallet ${gwallet.enabled ? 'activado' : 'desactivado (faltan GOOGLE_WALLET_ISSUER_ID o la clave)'}`);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));
