@@ -53,6 +53,20 @@ export function matchbar(match) {
   </section>`;
 }
 
+export function lastMatchBar({ match }) {
+  if (!match) return '';
+  return html`<section class="matchbar" aria-label="Último partido">
+    <div class="wrap">
+      <span class="eyebrow" style="color:var(--mostaza)">Último partido</span>
+      <p class="vs">Malos <span>${match.result}</span> ${match.opponent}</p>
+      <p class="when">${formatDateTime(match.starts_at)}${match.competition ? ` · ${match.competition}` : ''}</p>
+      <div class="matchbar-actions">
+        <a class="btn ghost-light" href="/partidos/${match.id}">Ver resultado</a>
+      </div>
+    </div>
+  </section>`;
+}
+
 export function standings(rows, { limit } = {}) {
   const list = limit ? rows.slice(0, limit) : rows;
   if (list.length === 0) {

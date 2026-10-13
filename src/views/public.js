@@ -5,7 +5,7 @@ import { championIcon, parseChampions } from '../lib/champions.js';
 import { POINTS, VOTE_POST_DAYS } from '../data.js';
 import { layout } from './layout.js';
 import { lastMatchCard, seasonTable } from './match.js';
-import { alert, carnet, fixtures, matchbar, news, playerPicker, roster, standings, supportBlock } from './components.js';
+import { alert, carnet, fixtures, lastMatchBar, matchbar, news, playerPicker, roster, standings, supportBlock } from './components.js';
 
 export function homePage({ stats, match, rank, players, posts, upcoming, season, last, oracle }) {
   const body = html`
@@ -23,7 +23,7 @@ export function homePage({ stats, match, rank, players, posts, upcoming, season,
       <img class="crest" src="/img/crest-outline.png" alt="Escudo de Malos" width="182" height="329">
     </div>
   </section>
-  ${matchbar(match)}
+  ${match ? matchbar(match) : lastMatchBar(last)}
   <section class="section">
     <div class="wrap">
       <div class="section-head">
