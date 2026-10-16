@@ -186,7 +186,7 @@ export function matchStatsAdminPage({ match, rows, flash }) {
     </div>
     ${flashBox(flash)}
     <form class="form" method="post" action="/admin/partidos/${match.id}/estadisticas">
-      <p class="muted">Marca quién jugó y pon sus totales del partido (si es un BO3, la suma de las partidas). Quienes jugaron son los que se pueden votar en la confirmación de MVP y fraude.</p>
+      <p class="muted">Rellena campeón y K/D/A de quienes jugaron: la casilla «Jugó» se marca sola. Si es un BO3, pon la suma de las partidas. Para quitar a alguien, desmarca su casilla y borra sus datos. Quienes jugaron son los que se pueden votar en la confirmación de MVP y fraude.</p>
       <div class="table-wrap"><table>
         <thead><tr><th>Jugó</th><th>Jugador</th><th>Campeón</th><th class="num">K</th><th class="num">D</th><th class="num">A</th></tr></thead>
         <tbody>${rows.map((r) => html`<tr>

@@ -36,6 +36,8 @@ const FLASH = {
   borrado: () => ({ kind: 'ok', message: 'Borrado.' }),
   guardado: (q) => ({ kind: 'ok', message: `Guardado.${q.enviados ? ` Aviso enviado a ${q.enviados} dispositivos.` : ''}` }),
   formato: () => ({ kind: 'error', message: 'Guardado, pero el resultado debería tener el formato 2-1 (Malos primero). Si no, la porra no puede puntuar el marcador.' }),
+  'kda-guardado': (q) => ({ kind: 'ok', message: `Guardadas las estadísticas de ${q.n} ${q.n === '1' ? 'jugador' : 'jugadores'}. Ya salen en el marcador del partido.` }),
+  'sin-filas': () => ({ kind: 'error', message: 'No se ha guardado ninguna fila: rellena el campeón o el K/D/A de quienes jugaron.' }),
   'pon-kda': (q) => ({ kind: 'ok', message: `Partido cerrado: ya se puede votar la confirmación.${q.enviados ? ` Aviso enviado a ${q.enviados} dispositivos.` : ''} Ahora mete los KDA.` }),
   faltan: () => ({ kind: 'error', message: 'Faltan campos obligatorios.' }),
   corregidos: (q) => ({ kind: 'ok', message: `Guardado. He corregido: ${q.nombres}.` }),
@@ -128,17 +130,21 @@ adminRoutes.post('/partidos/:id/estadisticas', async (c) => {
   const num = (v) => Math.max(0, Math.min(999, Math.trunc(Number(v) || 0)));
   const unknown = [];
   const rows = [];
+  const filled = (v) => String(v ?? '').trim() !== '';
   for (const p of statsRows(match)) {
-    if (!f[`played_${p.id}`]) continue;
     const text = String(f[`champion_${p.id}`] || '').trim();
+    // Cuenta como que jugó si se marca "Jugó" o si se ha rellenado algún dato de la fila.
+    const hasData = filled(text) || filled(f[`k_${p.id}`]) || filled(f[`d_${p.id}`]) || filled(f[`a_${p.id}`]);
+    if (!f[`played_${p.id}`] && !hasData) continue;
     const champ = text ? resolveChampion(text) : null;
     if (text && !champ) unknown.push(text);
     rows.push({ playerId: p.id, champion: champ?.id || '', kills: num(f[`k_${p.id}`]), deaths: num(f[`d_${p.id}`]), assists: num(f[`a_${p.id}`]) });
   }
   data.saveMatchStats(match.id, rows);
   const base = `/admin/partidos/${match.id}/estadisticas`;
+  if (!rows.length) return c.redirect(`${base}?ok=sin-filas`);
   if (unknown.length) return c.redirect(`${base}?ok=desconocidos&nombres=${encodeURIComponent(unknown.join(', '))}`);
-  return c.redirect(`${base}?ok=guardado`);
+  return c.redirect(`${base}?ok=kda-guardado&n=${rows.length}`);
 });
 
 adminRoutes.post('/partidos/:id/borrar', (c) => {
