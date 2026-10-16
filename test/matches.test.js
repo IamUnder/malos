@@ -15,21 +15,27 @@ const [top, jungla, mid] = players;
 const socio = (n) => data.verifyMember(data.createMember({ nick: `s${n}`, email: `s${n}@t.es` }).member);
 const DAY = 86400e3;
 
-test('la votación de predicción está abierta hasta que empieza el partido', () => {
-  const id = data.saveMatch({ startsAt: new Date(Date.now() + DAY), opponent: 'A', game: 'lol' });
+const H = 3600e3;
+
+test('predicción hasta el inicio; el veredicto se abre solo a las 3 h y dura 48 h', () => {
+  const start = Date.now() + DAY;
+  const id = data.saveMatch({ startsAt: new Date(start), opponent: 'A', game: 'lol' });
   const m = data.getMatch(id);
   assert.equal(data.votePhase(m), 'pre');
-  assert.equal(data.votePhase(m, Date.now() + 2 * DAY), null, 'en juego: cerrada');
+  assert.equal(data.votePhase(m, start + 1 * H), null, 'en juego: cerrada');
+  assert.equal(data.votePhase(m, start + 4 * H), 'post', 'se abre sola sin resultado');
+  assert.equal(data.votePhase(m, start + 52 * H), null, 'cerrada tras 48 h');
+  assert.equal(data.verdictClosed(m, start + 52 * H), true);
 });
 
-test('al poner el resultado se abre la confirmación durante 7 días', () => {
+test('poner el resultado antes de las 3 h adelanta el veredicto', () => {
   const id = data.saveMatch({ startsAt: new Date(Date.now() - DAY), opponent: 'B', game: 'lol' });
   assert.equal(data.getMatch(id).closed_at, null);
   data.saveMatch({ id, startsAt: new Date(Date.now() - DAY), opponent: 'B', game: 'lol', result: '2-1' });
   const m = data.getMatch(id);
   assert.ok(m.closed_at);
   assert.equal(data.votePhase(m), 'post');
-  assert.equal(data.votePhase(m, Date.now() + 8 * DAY), null);
+  assert.equal(data.votePhase(m, Date.now() + 3 * DAY), null);
   // Volver a guardar con resultado no reinicia el plazo.
   data.saveMatch({ id, startsAt: new Date(Date.now() - DAY), opponent: 'B', game: 'lol', result: '2-1' });
   assert.equal(data.getMatch(id).closed_at, m.closed_at);
@@ -62,7 +68,9 @@ test('tras meter estadísticas solo se puede votar a quien jugó', () => {
 });
 
 test('las estadísticas de la temporada suman KDA y cuentan MVP/fraude confirmados', () => {
-  const id = data.saveMatch({ startsAt: new Date(Date.now() - 2 * DAY), opponent: 'E', game: 'lol', result: '2-0' });
+  const id = data.saveMatch({ startsAt: new Date(Date.now() - 4 * DAY), opponent: 'E', game: 'lol', result: '2-0' });
+  // Cerrado hace tiempo: el veredicto ya se ha revelado.
+  data.saveMatch({ id, startsAt: new Date(Date.now() - 4 * DAY), opponent: 'E', game: 'lol', result: '2-0' });
   data.saveMatchStats(id, [
     { playerId: top.id, champion: 'Urgot', kills: 4, deaths: 2, assists: 4 },
     { playerId: mid.id, champion: 'Yasuo', kills: 0, deaths: 9, assists: 1 },
@@ -103,12 +111,56 @@ test('El Oráculo: suma, desempata por exactos y respeta quien no quiere salir',
   data.castVote({ match: pre, member: a, phase: 'pre', mvpId: top.id, fraudId: mid.id, score: '2-1' }); // 3+3+5
   data.castVote({ match: pre, member: b, phase: 'pre', mvpId: top.id, fraudId: mid.id, score: '2-0' }); // 3+3+2
   data.castVote({ match: pre, member: c, phase: 'pre', mvpId: mid.id, fraudId: top.id, score: '0-2' }); // 0
-  data.saveMatch({ id, startsAt: new Date(Date.now() - DAY), opponent: 'Oráculo', game: 'lol', bestOf: 3, result: '2-1' });
+  data.saveMatch({ id, startsAt: new Date(Date.now() - 3 * DAY), opponent: 'Oráculo', game: 'lol', bestOf: 3, result: '2-1' });
   const post = data.getMatch(id);
-  data.castVote({ match: post, member: c, phase: 'post', mvpId: top.id, fraudId: mid.id });
+  for (const m of [a, b, c]) data.castVote({ match: post, member: m, phase: 'post', mvpId: top.id, fraudId: mid.id });
+  data.saveMatchStats(id, [
+    { playerId: top.id, champion: 'Ornn', kills: 6, deaths: 1, assists: 6 },   // mejor KDA
+    { playerId: mid.id, champion: 'Yasuo', kills: 1, deaths: 8, assists: 1 },
+  ]);
 
   const rows = data.oracleStandings().filter((r) => [a.id, b.id, c.id].includes(r.member_id));
-  assert.deepEqual(rows.map((r) => [r.nick, r.points, r.exact]), [['s10', 11, 1], ['s11', 8, 0], ['s12', 0, 0]]);
+  // a: MVP 3 + fraude 3 + exacto 5 + mejor KDA 2 · b: 3 + 3 + ganador 2 + 2 · c: nada
+  assert.deepEqual(rows.map((r) => [r.nick, r.points, r.exact]), [['s10', 13, 1], ['s11', 10, 0], ['s12', 0, 0]]);
   data.setOracleHidden(b.id, true);
   assert.equal(data.oracleStandings().find((r) => r.member_id === b.id).hidden, true);
+});
+
+test('el veredicto es secreto hasta que se cierra', () => {
+  const start = Date.now() - 10 * H; // abierto ahora (se abrió a las 3 h)
+  const id = data.saveMatch({ startsAt: new Date(start), opponent: 'Secreto', game: 'lol' });
+  const m = data.getMatch(id);
+  for (const n of [20, 21, 22]) data.castVote({ match: m, member: socio(n), phase: 'post', mvpId: jungla.id, fraudId: top.id });
+  const open = data.matchVerdict(m);
+  assert.equal(open.closed, false);
+  assert.equal(open.votes, 3);
+  assert.deepEqual(open.mvp, [], 'no se revela mientras está abierto');
+  const later = data.matchVerdict(m, start + 60 * H);
+  assert.equal(later.closed, true);
+  assert.equal(later.byFans, true);
+  assert.deepEqual(later.mvp.map((p) => p.nick), ['Jungla']);
+});
+
+test('con menos de 3 votos, MVP y fraude los deciden los números', () => {
+  const start = Date.now() - 5 * DAY;
+  const id = data.saveMatch({ startsAt: new Date(start), opponent: 'Pocos', game: 'lol', result: '1-0' });
+  const m = data.getMatch(id);
+  data.castVote({ match: m, member: socio(30), phase: 'post', mvpId: jungla.id, fraudId: top.id });
+  data.saveMatchStats(id, [
+    { playerId: top.id, champion: '', kills: 9, deaths: 1, assists: 3 },
+    { playerId: jungla.id, champion: '', kills: 2, deaths: 2, assists: 2 },
+    { playerId: mid.id, champion: '', kills: 0, deaths: 7, assists: 1 },
+  ]);
+  const v = data.matchVerdict(m);
+  assert.equal(v.closed, true);
+  assert.equal(v.byFans, false);
+  assert.deepEqual(v.mvp.map((p) => p.nick), ['Top'], 'mejor KDA');
+  assert.deepEqual(v.fraud.map((p) => p.nick), ['Mid'], 'peor KDA');
+});
+
+test('partidos jugados sin KDA', () => {
+  const id = data.saveMatch({ startsAt: new Date(Date.now() - 6 * H), opponent: 'SinKDA', game: 'lol' });
+  assert.ok(data.matchesMissingStats().some((m) => m.id === id));
+  data.saveMatchStats(id, [{ playerId: top.id, champion: '', kills: 1, deaths: 1, assists: 1 }]);
+  assert.ok(!data.matchesMissingStats().some((m) => m.id === id));
 });

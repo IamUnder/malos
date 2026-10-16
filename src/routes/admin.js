@@ -44,7 +44,7 @@ const FLASH = {
 const flashOf = (c) => FLASH[c.req.query('ok')]?.(c.req.query()) || null;
 
 adminRoutes.get('/', (c) => c.html(views.dashboardPage({
-  stats: data.stats(), rank: data.ranking(), recent: data.listMembers({ limit: 8 }), flash: flashOf(c),
+  stats: data.stats(), rank: data.ranking(), recent: data.listMembers({ limit: 8 }), missing: data.matchesMissingStats(), flash: flashOf(c),
 })));
 
 // ---------- Noticias y avisos ----------

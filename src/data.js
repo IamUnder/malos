@@ -74,20 +74,43 @@ export function saveMatch({ id, startsAt, opponent, competition, game, streamUrl
 
 export const lastPlayedMatch = () => db.prepare("SELECT * FROM matches WHERE result != '' ORDER BY starts_at DESC LIMIT 1").get();
 
+/** Partidos ya jugados (con resultado o empezados hace más de 3 h) que aún no tienen KDA. */
+export const matchesMissingStats = () => db.prepare(`
+  SELECT m.* FROM matches m
+  WHERE (m.result != '' OR m.starts_at <= ?)
+    AND NOT EXISTS (SELECT 1 FROM match_stats s WHERE s.match_id = m.id)
+  ORDER BY m.starts_at DESC
+`).all(new Date(Date.now() - 3 * 3600e3).toISOString());
+
 // ---------- MVP y fraude ----------
 //
-// Dos votaciones por partido y socio: la predicción ("pre", hasta que empieza el partido) y la
-// confirmación ("post", desde que se pone el resultado y durante VOTE_POST_DAYS días). Se puede
-// cambiar el voto mientras la votación está abierta. MVP y fraude no pueden ser el mismo jugador.
+// Dos votaciones por partido y socio:
+// - Predicción ("pre"): hasta que empieza el partido.
+// - Veredicto ("post"): se abre sola VOTE_POST_DELAY_H horas después del inicio (o antes, si ya se ha
+//   puesto el resultado) y dura VOTE_POST_HOURS horas. Su resultado es secreto hasta que se cierra.
+// Se puede cambiar el voto mientras la votación está abierta. MVP y fraude no pueden ser el mismo jugador.
 
-export const VOTE_POST_DAYS = 7;
+export const VOTE_POST_DELAY_H = 3;
+export const VOTE_POST_HOURS = 48;
+/** Con menos votos que esto, el veredicto lo deciden los números (mejor y peor KDA). */
+export const MIN_VERDICT_VOTES = 3;
+
+/** Cuándo se abre y se cierra el veredicto de un partido (en ms). */
+export function postWindow(match) {
+  const start = new Date(match.starts_at).getTime();
+  let opens = start + VOTE_POST_DELAY_H * 3600e3;
+  if (match.result && match.closed_at) opens = Math.max(start, Math.min(opens, new Date(match.closed_at).getTime()));
+  return { opens, closes: opens + VOTE_POST_HOURS * 3600e3 };
+}
 
 /** 'pre', 'post' o null (en juego, o votación ya cerrada). */
 export function votePhase(match, at = Date.now()) {
-  if (!match.result) return at < new Date(match.starts_at).getTime() ? 'pre' : null;
-  const closed = new Date(match.closed_at || match.starts_at).getTime();
-  return at < closed + VOTE_POST_DAYS * 86400e3 ? 'post' : null;
+  if (at < new Date(match.starts_at).getTime()) return 'pre';
+  const { opens, closes } = postWindow(match);
+  return at >= opens && at < closes ? 'post' : null;
 }
+
+export const verdictClosed = (match, at = Date.now()) => at >= postWindow(match).closes;
 
 /** A quién se puede votar: quienes jugaron (si ya hay estadísticas) o la plantilla activa de ese juego. */
 export function voteCandidates(match) {
@@ -130,11 +153,13 @@ export const winners = (rows) => (rows.length ? rows.filter((r) => r.votes === r
 
 // ---------- El Oráculo (porra) ----------
 //
-// Cada predicción ("pre") puntúa cuando el partido tiene resultado, comparándola con el veredicto final
-// de la afición (MVP y fraude, empates incluidos) y con el marcador. Mientras la votación final siga
-// abierta, los puntos de ese partido son provisionales.
+// Cada predicción ("pre") puntúa así:
+// - Resultado: exacto o solo el ganador, en cuanto hay resultado.
+// - Mejor KDA: si tu MVP es el jugador con mejor KDA del partido, en cuanto hay estadísticas.
+// - MVP y fraude: frente al veredicto, solo cuando se cierra (antes revelaría quién va ganando).
+//   Si el veredicto tiene menos de MIN_VERDICT_VOTES votos, deciden los números (mejor y peor KDA).
 
-export const POINTS = { mvp: 3, fraud: 3, exact: 5, winner: 2 };
+export const POINTS = { mvp: 3, fraud: 3, exact: 5, winner: 2, kda: 2 };
 
 /** Marcadores posibles de un partido al mejor de N, desde el punto de vista de Malos: BO3 → 2-0, 2-1, 1-2, 0-2. */
 export function scoreOptions(bestOf = 1) {
@@ -150,26 +175,71 @@ export function parseScore(text) {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
-/** Lo que realmente pasó en un partido cerrado: ganadores de la votación final y marcador. */
-export function matchOutcome(match) {
+/** Mejor y peor KDA de un partido (con empates), a partir de sus estadísticas. */
+export function statsAwards(stats) {
+  if (!stats.length) return { best: [], worst: [] };
+  const k = (s) => kdaRatio(s.kills, s.deaths, s.assists);
+  const values = stats.map(k);
+  const best = stats.filter((s) => k(s) === Math.max(...values));
+  const worst = stats.filter((s) => k(s) === Math.min(...values));
+  // Si todos tienen el mismo KDA (o solo hay uno), no hay "peor".
+  return { best, worst: worst.length === stats.length ? [] : worst };
+}
+
+/**
+ * Veredicto de un partido: { closed, opens, closes, votes, byFans, mvp, fraud, kdaBest, kdaWorst, stats }.
+ * `mvp` y `fraud` (jugadores) solo se rellenan cuando el veredicto está cerrado.
+ */
+export function matchVerdict(match, at = Date.now()) {
+  const stats = matchStats(match.id);
+  const { best, worst } = statsAwards(stats);
   const post = voteTally(match.id, 'post');
+  const { opens, closes } = postWindow(match);
+  const closed = at >= closes;
+  const byFans = post.total >= MIN_VERDICT_VOTES;
+  const fromStats = (rows) => rows.map((s) => getPlayer(s.player_id)).filter(Boolean);
   return {
-    mvp: new Set(winners(post.mvp).map((p) => p.id)),
-    fraud: new Set(winners(post.fraud).map((p) => p.id)),
-    score: parseScore(match.result),
-    final: votePhase(match) === null,
+    closed,
+    opens,
+    closes,
+    votes: post.total,
+    byFans,
+    mvp: closed ? (byFans ? winners(post.mvp) : fromStats(best)) : [],
+    fraud: closed ? (byFans ? winners(post.fraud) : fromStats(worst)) : [],
+    kdaBest: best,
+    kdaWorst: worst,
+    stats,
   };
 }
 
-/** Puntos de una predicción frente al resultado: { mvp, fraud, exact, winner, points }. */
+/** Lo que cuenta para la porra de un partido. */
+export function matchOutcome(match, at = Date.now()) {
+  const v = matchVerdict(match, at);
+  return {
+    mvp: new Set(v.mvp.map((p) => p.id)),
+    fraud: new Set(v.fraud.map((p) => p.id)),
+    kdaBest: new Set(v.kdaBest.map((s) => s.player_id)),
+    score: parseScore(match.result),
+    final: v.closed,
+  };
+}
+
+/** Puntos de una predicción frente al resultado: { mvp, fraud, exact, winner, kda, points }. */
 export function scorePrediction(vote, outcome) {
-  const hit = { mvp: outcome.mvp.has(vote.mvp_id), fraud: outcome.fraud.has(vote.fraud_id), exact: false, winner: false };
+  const hit = {
+    mvp: outcome.mvp.has(vote.mvp_id),
+    fraud: outcome.fraud.has(vote.fraud_id),
+    kda: Boolean(outcome.kdaBest?.has(vote.mvp_id)),
+    exact: false,
+    winner: false,
+  };
   const guess = parseScore(vote.score);
   if (guess && outcome.score) {
     hit.exact = guess[0] === outcome.score[0] && guess[1] === outcome.score[1];
     hit.winner = !hit.exact && Math.sign(guess[0] - guess[1]) === Math.sign(outcome.score[0] - outcome.score[1]);
   }
-  hit.points = (hit.mvp ? POINTS.mvp : 0) + (hit.fraud ? POINTS.fraud : 0) + (hit.exact ? POINTS.exact : 0) + (hit.winner ? POINTS.winner : 0);
+  hit.points = (hit.mvp ? POINTS.mvp : 0) + (hit.fraud ? POINTS.fraud : 0) + (hit.exact ? POINTS.exact : 0)
+    + (hit.winner ? POINTS.winner : 0) + (hit.kda ? POINTS.kda : 0);
   return hit;
 }
 
@@ -178,8 +248,9 @@ export function scorePrediction(vote, outcome) {
  * Empatan (misma posición) quienes tienen los mismos puntos y los mismos marcadores exactos.
  */
 export function oracleStandings() {
-  const closed = db.prepare("SELECT * FROM matches WHERE result != ''").all();
-  const outcomes = new Map(closed.map((m) => [m.id, matchOutcome(m)]));
+  // Partidos ya empezados: pueden tener resultado, estadísticas o veredicto.
+  const started = db.prepare('SELECT * FROM matches WHERE starts_at <= ?').all(now());
+  const outcomes = new Map(started.map((m) => [m.id, matchOutcome(m)]));
   const votes = db.prepare(`
     SELECT v.*, m.nick, m.number, m.oracle_hidden FROM match_votes v JOIN members m ON m.id = v.member_id
     WHERE v.phase = 'pre' AND m.verified_at IS NOT NULL
@@ -193,7 +264,7 @@ export function oracleStandings() {
     const s = scorePrediction(v, outcome);
     r.points += s.points;
     r.played += 1;
-    r.hits += Number(s.mvp) + Number(s.fraud) + Number(s.exact || s.winner);
+    r.hits += Number(s.mvp) + Number(s.fraud) + Number(s.exact || s.winner) + Number(s.kda);
     r.exact += Number(s.exact);
     rows.set(v.member_id, r);
   }
@@ -242,12 +313,14 @@ export function seasonStats(game = 'lol') {
     GROUP BY p.id
   `).all(game);
 
+  // Solo cuentan los veredictos ya cerrados (de la afición, o de los números si hubo pocos votos).
   const awards = new Map(rows.map((r) => [r.id, { mvp: 0, fraud: 0 }]));
-  const closed = db.prepare("SELECT id FROM matches WHERE game = ? AND result != ''").all(game);
-  for (const { id } of closed) {
-    const tally = voteTally(id, 'post');
-    for (const w of winners(tally.mvp)) if (awards.has(w.id)) awards.get(w.id).mvp++;
-    for (const w of winners(tally.fraud)) if (awards.has(w.id)) awards.get(w.id).fraud++;
+  const played = db.prepare('SELECT * FROM matches WHERE game = ? AND starts_at <= ?').all(game, now());
+  for (const match of played) {
+    const v = matchVerdict(match);
+    if (!v.closed) continue;
+    for (const p of v.mvp) if (awards.has(p.id)) awards.get(p.id).mvp++;
+    for (const p of v.fraud) if (awards.has(p.id)) awards.get(p.id).fraud++;
   }
 
   return rows

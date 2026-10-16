@@ -19,7 +19,9 @@ const players = listPlayers();
 const day = 86400e3;
 const nextId = saveMatch({ startsAt: new Date(Date.now() + 2 * day), opponent: 'Rival de ejemplo', competition: 'Liga UCLM · Jornada 3', game: 'lol', bestOf: 3, streamUrl: 'https://www.twitch.tv/' });
 saveMatch({ startsAt: new Date(Date.now() + 9 * day), opponent: 'Otro rival', competition: 'Liga UCLM · Jornada 4', game: 'lol' });
-const pastId = saveMatch({ startsAt: new Date(Date.now() - 2 * day), opponent: 'Rival pasado', competition: 'Liga UCLM · Jornada 2', game: 'lol', bestOf: 3, result: '2-1' });
+const pastId = saveMatch({ startsAt: new Date(Date.now() - 3 * day), opponent: 'Rival pasado', competition: 'Liga UCLM · Jornada 2', game: 'lol', bestOf: 3, result: '2-1' });
+// Partido de ayer: veredicto abierto (secreto) y todavía sin KDA.
+const yesterdayId = saveMatch({ startsAt: new Date(Date.now() - 10 * 3600e3), opponent: 'Rival de ayer', competition: 'Liga UCLM · Jornada 2b', game: 'lol', bestOf: 3, result: '0-2' });
 // KDA de ejemplo del partido pasado (mismo orden que la plantilla: top, jungla, mid, adc, support)
 const kda = [['Ornn', 3, 4, 11], ['Viego', 7, 2, 9], ['Sylas', 9, 3, 6], ['Jinx', 11, 1, 5], ['Thresh', 1, 5, 18]];
 saveMatchStats(pastId, kda.map(([champion, kills, deaths, assists], i) => ({ playerId: players[i].id, champion, kills, deaths, assists })));
@@ -46,6 +48,8 @@ all.forEach((member, i) => {
   castVote({ match: getMatch(nextId), member, phase: 'pre', mvpId: mvp, fraudId: fraud, score: scores[i % 4] });
   castVote({ match: getMatch(pastId), member, phase: 'pre', mvpId: pick(i, 2), fraudId: pick(i, 2) === players[4].id ? players[0].id : players[4].id, score: scores[(i * 3) % 4] });
   if (i % 3) castVote({ match: getMatch(pastId), member, phase: 'post', mvpId: i % 2 ? players[3].id : players[1].id, fraudId: players[4].id });
+  castVote({ match: getMatch(yesterdayId), member, phase: 'pre', mvpId: mvp, fraudId: fraud, score: scores[(i + 1) % 4] });
+  if (i % 2) castVote({ match: getMatch(yesterdayId), member, phase: 'post', mvpId: players[2].id, fraudId: players[0].id });
 });
 
 // El primer socio, con el favorito cambiado hace tiempo, para probar el cambio de favorito.

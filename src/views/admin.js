@@ -27,10 +27,15 @@ export function loginPage({ error }) {
   });
 }
 
-export function dashboardPage({ stats, rank, recent, flash }) {
+export function dashboardPage({ stats, rank, recent, missing = [], flash }) {
   return page('/admin', 'Resumen', html`
     <h2>Resumen</h2>
     ${flashBox(flash)}
+    ${missing.length ? html`<div class="alert error stack" style="gap:8px">
+      <b>${missing.length === 1 ? 'Hay un partido jugado sin KDA' : `Hay ${missing.length} partidos jugados sin KDA`}</b>
+      <span style="font-weight:400">Sin estadísticas no hay marcador, ni «MVP de los números», ni puntos de mejor KDA en El Oráculo.</span>
+      <div class="row-actions">${missing.map((m) => html`<a class="btn small" href="/admin/partidos/${m.id}/estadisticas">vs ${m.opponent} · ${formatDate(m.starts_at, { day: 'numeric', month: 'short' })}</a>`)}</div>
+    </div>` : ''}
     ${config.push.enabled ? '' : alert('info', 'Los avisos push están desactivados: faltan VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY en el .env.')}
     ${config.mail.enabled ? '' : alert('info', 'No hay SMTP configurado: los enlaces de confirmación solo salen en el log del servidor.')}
     <div class="tiles">

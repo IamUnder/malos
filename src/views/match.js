@@ -1,12 +1,15 @@
-// Página de un partido (votaciones de MVP/fraude y marcador) y tabla de estadísticas de la temporada.
+// Página de un partido (resumen, marcador, votaciones de MVP/fraude) y tabla de estadísticas de la temporada.
 import { html } from 'hono/html';
-import { GAMES, POINTS, VOTE_POST_DAYS, scoreOptions, winners } from '../data.js';
+import { GAMES, POINTS, VOTE_POST_HOURS, MIN_VERDICT_VOTES, parseScore, scoreOptions } from '../data.js';
 import { formatDate, formatDateTime } from '../lib/format.js';
 import { championIcon, championName } from '../lib/champions.js';
 import { layout } from './layout.js';
 import { alert, avatar, isLive, roleLabel } from './components.js';
 
 const fmtKda = (x) => (Number.isFinite(x) ? x.toFixed(2).replace('.', ',') : '—');
+const kdaOf = (s) => (s.kills + s.assists) / Math.max(1, s.deaths);
+const names = (players) => players.map((p) => p.nick).join(' y ');
+const when = (ms) => formatDate(new Date(ms).toISOString(), { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export function championCell(id) {
   if (!id) return html`<span class="muted">—</span>`;
@@ -14,26 +17,30 @@ export function championCell(id) {
   return html`<span class="champ-cell">${src ? html`<img src="${src}" alt="" width="28" height="28" loading="lazy">` : ''}${championName(id)}</span>`;
 }
 
-/** Marcador del partido: una fila por jugador con campeón y K/D/A. */
-export function scoreboard(stats) {
+/**
+ * Marcador del partido: una fila por jugador con campeón y K/D/A.
+ * Marca el mejor KDA y, si el veredicto está cerrado, al MVP y al fraude.
+ */
+export function scoreboard(stats, { mvpIds = new Set(), fraudIds = new Set(), bestIds = new Set() } = {}) {
   if (!stats.length) return '';
+  const badges = (s) => html`${mvpIds.has(s.player_id) ? html`<span class="badge mvp">MVP</span>` : ''}${fraudIds.has(s.player_id) ? html`<span class="badge fraud">Fraude</span>` : ''}${bestIds.has(s.player_id) ? html`<span class="badge kda">Mejor KDA</span>` : ''}`;
   return html`<div class="table-wrap"><table class="scoreboard">
     <thead><tr><th>Jugador</th><th>Campeón</th><th class="num">K / D / A</th><th class="num">KDA</th></tr></thead>
-    <tbody>${stats.map((s) => html`<tr>
-      <td><span class="player-cell">${avatar({ nick: s.nick, champions: s.player_champions }, { size: 32 })}<span><b>${s.nick}</b><br><small class="muted">${roleLabel(s.role)}</small></span></span></td>
+    <tbody>${stats.map((s) => html`<tr class="${mvpIds.has(s.player_id) ? 'row-mvp' : ''}${fraudIds.has(s.player_id) ? ' row-fraud' : ''}">
+      <td><span class="player-cell">${avatar({ nick: s.nick, champions: s.player_champions }, { size: 32 })}<span><b>${s.nick}</b> ${badges(s)}<br><small class="muted">${roleLabel(s.role)}</small></span></span></td>
       <td>${championCell(s.champion)}</td>
       <td class="num">${s.kills} / ${s.deaths} / ${s.assists}</td>
-      <td class="num"><b>${fmtKda((s.kills + s.assists) / Math.max(1, s.deaths))}</b></td>
+      <td class="num"><b>${fmtKda(kdaOf(s))}</b></td>
     </tr>`)}</tbody>
   </table></div>`;
 }
 
-/** Tabla de la temporada: partidos, K/D/A, KDA medio y veces MVP/fraude según la afición. */
+/** Tabla de la temporada: partidos, K/D/A, KDA medio y veces MVP/fraude según el veredicto. */
 export function seasonTable(rows) {
   const played = rows.filter((r) => r.games > 0);
   if (!played.length) return html`<p class="empty">Las estadísticas aparecerán en cuanto se juegue el primer partido.</p>`;
   return html`<div class="table-wrap"><table class="season">
-    <thead><tr><th>Jugador</th><th class="num">PJ</th><th class="num">K</th><th class="num">D</th><th class="num">A</th><th class="num">KDA</th><th class="num" title="Veces MVP según la afición">MVP</th><th class="num" title="Veces fraude según la afición">Fraude</th></tr></thead>
+    <thead><tr><th>Jugador</th><th class="num">PJ</th><th class="num">K</th><th class="num">D</th><th class="num">A</th><th class="num">KDA</th><th class="num" title="Veces MVP según el veredicto">MVP</th><th class="num" title="Veces fraude según el veredicto">Fraude</th></tr></thead>
     <tbody>${played.map((r) => html`<tr>
       <td><span class="player-cell">${avatar(r, { size: 32 })}<span><b>${r.nick}</b><br><small class="muted">${roleLabel(r.role)}</small></span></span></td>
       <td class="num">${r.games}</td><td class="num">${r.kills}</td><td class="num">${r.deaths}</td><td class="num">${r.assists}</td>
@@ -41,7 +48,7 @@ export function seasonTable(rows) {
       <td class="num">${r.mvp || '—'}</td><td class="num">${r.fraud || '—'}</td>
     </tr>`)}</tbody>
   </table></div>
-  <p class="muted" style="margin-top:10px;font-size:.85rem">KDA = (asesinatos + asistencias) / muertes. MVP y fraude: veredicto de la afición tras cada partido.</p>`;
+  <p class="muted" style="margin-top:10px;font-size:.85rem">KDA = (asesinatos + asistencias) / muertes. MVP y fraude: veredicto de la afición tras cada partido (o de los números, si hubo menos de ${MIN_VERDICT_VOTES} votos).</p>`;
 }
 
 function tallyList(rows, total, kind) {
@@ -87,22 +94,22 @@ function scorePicker(match, selected) {
   </div>`;
 }
 
-/** Cómo le ha ido a este socio en la porra de este partido. */
-function myPredictionResult(result) {
+/** Cómo le ha ido a este socio en la porra de este partido (tarjeta del resumen). */
+function myPorraCard(result) {
   if (!result) return '';
-  const line = (ok, label, pts) => html`<li class="${ok ? 'hit' : 'miss'}"><span>${ok ? '✓' : '✗'}</span> ${label}${ok ? html` <b>+${pts}</b>` : ''}</li>`;
-  return html`<section class="panel stack my-porra">
-    <div class="row-actions" style="justify-content:space-between;align-items:baseline">
-      <h3>Tu porra</h3><p class="porra-points mono">+${result.points} <small>puntos${result.final ? '' : ' · provisional'}</small></p>
-    </div>
+  const line = (state, label, pts) => html`<li class="${state}"><span>${state === 'hit' ? '✓' : state === 'miss' ? '✗' : '…'}</span> ${label}${state === 'hit' ? html` <b>+${pts}</b>` : ''}</li>`;
+  const pending = result.final ? null : 'pending';
+  return html`<div class="sum-card my-porra">
+    <p class="eyebrow">Tu porra</p>
+    <p class="porra-points mono">+${result.points}<small> pts${result.final ? '' : ' de momento'}</small></p>
     <ul>
-      ${line(result.mvp, 'MVP', POINTS.mvp)}
-      ${line(result.fraud, 'Fraude', POINTS.fraud)}
-      ${result.exact ? line(true, 'Resultado exacto', POINTS.exact) : line(result.winner, 'Ganador', POINTS.winner)}
+      ${line(pending || (result.mvp ? 'hit' : 'miss'), 'MVP', POINTS.mvp)}
+      ${line(pending || (result.fraud ? 'hit' : 'miss'), 'Fraude', POINTS.fraud)}
+      ${result.hasScore ? (result.exact ? line('hit', 'Resultado exacto', POINTS.exact) : line(result.winner ? 'hit' : 'miss', 'Ganador', POINTS.winner)) : line('pending', 'Resultado', POINTS.exact)}
+      ${result.hasStats ? line(result.kda ? 'hit' : 'miss', 'Mejor KDA', POINTS.kda) : line('pending', 'Mejor KDA', POINTS.kda)}
     </ul>
-    ${result.final ? '' : html`<p class="muted">Puede cambiar hasta que se cierre el veredicto final de la afición.</p>`}
-    <p><a href="/oraculo">Ver la clasificación de El Oráculo</a></p>
-  </section>`;
+    <a href="/oraculo">El Oráculo →</a>
+  </div>`;
 }
 
 function votePicker(name, candidates, selected) {
@@ -114,11 +121,11 @@ function votePicker(name, candidates, selected) {
   </div>`;
 }
 
-function voteForm({ match, phase, candidates, member, myVote }) {
+function voteForm({ match, phase, candidates, member, myVote, closes }) {
   const title = phase === 'pre' ? '¿Quién va a ser el MVP y quién el fraude?' : '¿Quién ha sido el MVP y quién el fraude?';
   const hint = phase === 'pre'
     ? 'Tu predicción. Puedes cambiarla hasta que empiece el partido.'
-    : `Tu veredicto final. Puedes cambiarlo hasta ${VOTE_POST_DAYS} días después del partido.`;
+    : `Tu veredicto. Es secreto hasta que se cierre, el ${when(closes)}. Hasta entonces puedes cambiarlo.`;
   if (!member) {
     return html`<section class="panel stack vote-cta">
       <h3>${title}</h3>
@@ -132,59 +139,112 @@ function voteForm({ match, phase, candidates, member, myVote }) {
     <fieldset class="field"><legend>MVP <span class="muted">· el mejor del partido</span></legend>${votePicker('mvp', candidates, myVote?.mvp_id)}</fieldset>
     <fieldset class="field"><legend>Fraude <span class="muted">· el que no apareció</span></legend>${votePicker('fraud', candidates, myVote?.fraud_id)}</fieldset>
     ${phase === 'pre' ? html`<fieldset class="field"><legend>Resultado <span class="muted">· al mejor de ${match.best_of || 1}</span></legend>${scorePicker(match, myVote?.score)}</fieldset>
-      <p class="hint muted">Puntos de El Oráculo: MVP +${POINTS.mvp} · fraude +${POINTS.fraud} · resultado exacto +${POINTS.exact} (o +${POINTS.winner} si aciertas solo el ganador).</p>` : ''}
+      <p class="hint muted">Puntos de El Oráculo: MVP +${POINTS.mvp} · fraude +${POINTS.fraud} · resultado exacto +${POINTS.exact} (o +${POINTS.winner} si aciertas solo el ganador) · +${POINTS.kda} si tu MVP es el mejor KDA del partido.</p>` : ''}
     <button class="btn" type="submit">${myVote ? 'Cambiar mi voto' : 'Votar'}</button>
   </form>`;
 }
 
-export function matchPage({ match, phase, candidates, member, myVotes, preTally, postTally, stats, flash, myResult }) {
-  const played = Boolean(match.result);
-  const status = played
-    ? html`<span class="pill ok">Final · ${match.result}</span>`
-    : isLive(match) ? html`<span class="live">EN DIRECTO</span>` : html`<span class="pill">${formatDateTime(match.starts_at)}</span>`;
-
-  const verdict = played && postTally.total ? winners(postTally.mvp).map((p) => p.nick).join(' y ') : '';
-  const body = html`<section class="match-head"><div class="wrap stack" style="gap:12px">
-      <p class="eyebrow" style="color:var(--mostaza)">${[match.competition, GAMES[match.game]].filter(Boolean).join(' · ')}</p>
-      <h1>Malos <span>vs</span> ${match.opponent}</h1>
-      <div class="row-actions" style="align-items:center">${status}
-        ${match.stream_url ? html`<a class="btn small" href="${match.stream_url}" target="_blank" rel="noopener">${played ? 'Ver la retransmisión' : 'Verlo en directo'}</a>` : ''}
-      </div>
-      ${verdict ? html`<p class="verdict">MVP de la afición: <b>${verdict}</b></p>` : ''}
-    </div></section>
-    <div class="narrow wide" id="votar">
-      ${flash ? alert(flash.kind, flash.message) : ''}
-      ${phase ? voteForm({ match, phase, candidates, member, myVote: myVotes[phase] }) : ''}
-      ${!phase && !played ? html`<p class="alert info">Partido en juego: la predicción ya está cerrada. La votación final se abre cuando termine.</p>` : ''}
-      ${played && !phase ? html`<p class="alert info">La votación de este partido ya está cerrada.</p>` : ''}
-      ${stats.length ? html`<section class="stack"><h2>Marcador</h2>${scoreboard(stats)}</section>` : ''}
-      ${played ? tallyBlock('Veredicto final de la afición', postTally, 'después del partido') : ''}
-      ${myPredictionResult(myResult)}
-      ${tallyBlock('Predicción de la afición', preTally, 'antes del partido', {
-        // Mientras se puede predecir, solo la ve quien ya ha votado: así nadie se deja arrastrar por la mayoría.
-        hidden: phase === 'pre' && !myVotes.pre
-          ? (member ? 'Vota tu predicción para ver qué opina el resto de la afición.' : 'Se verá cuando empiece el partido. Los socios la ven en cuanto votan.')
-          : null,
-      })}
-      <p><a href="/partidos">Todos los partidos</a></p>
-    </div>`;
-  return layout({ title: `Malos vs ${match.opponent}`, path: '/partidos', body });
+/** Tarjetas del resumen de un partido ya jugado. */
+function summary({ verdict, myResult }) {
+  const verdictCard = (label, players, kind) => html`<div class="sum-card ${kind}">
+    <p class="eyebrow">${label}</p>
+    ${verdict.closed
+      ? (players.length
+        ? html`<div class="sum-players">${players.map((p) => html`<span>${avatar(p, { size: 44 })}<b>${p.nick}</b></span>`)}</div>
+          <small class="muted">${verdict.byFans ? `Votado por la afición (${verdict.votes} votos)` : `Por los números: hubo menos de ${MIN_VERDICT_VOTES} votos`}</small>`
+        : html`<p class="muted">Sin veredicto</p>`)
+      : html`<p class="sum-secret">Se revela el ${when(verdict.closes)}</p><small class="muted">${verdict.votes} ${verdict.votes === 1 ? 'voto' : 'votos'} hasta ahora</small>`}
+  </div>`;
+  const best = verdict.kdaBest;
+  return html`<section class="summary">
+    ${verdictCard('MVP de la afición', verdict.mvp, 'mvp')}
+    ${verdictCard('Fraude de la afición', verdict.fraud, 'fraud')}
+    <div class="sum-card kda">
+      <p class="eyebrow">MVP de los números</p>
+      ${best.length
+        ? html`<div class="sum-players">${best.map((s) => html`<span>${avatar({ nick: s.nick, champions: s.player_champions }, { size: 44 })}<b>${s.nick}</b></span>`)}</div>
+          <small class="muted">Mejor KDA: ${best[0].kills}/${best[0].deaths}/${best[0].assists} · ${fmtKda(kdaOf(best[0]))}</small>`
+        : html`<p class="muted">Cuando se publiquen las estadísticas</p>`}
+    </div>
+    ${myPorraCard(myResult)}
+  </section>`;
 }
 
-/** Resumen del último partido para la portada. */
-export function lastMatchCard({ match, stats, postTally }) {
+export function matchPage({ match, phase, candidates, member, myVotes, preTally, postTally, verdict, flash, myResult }) {
+  const started = Date.now() >= new Date(match.starts_at).getTime();
+  const score = parseScore(match.result);
+  const outcome = score ? (score[0] > score[1] ? 'Victoria' : score[0] < score[1] ? 'Derrota' : 'Empate') : '';
+  const stats = verdict.stats;
+  const ids = (list, key = 'id') => new Set(list.map((x) => x[key]));
+
+  const head = html`<section class="match-head${score ? (score[0] > score[1] ? ' won' : ' lost') : ''}"><div class="wrap stack" style="gap:12px">
+      <p class="eyebrow" style="color:var(--mostaza)">${[match.competition, GAMES[match.game], formatDateTime(match.starts_at)].filter(Boolean).join(' · ')}</p>
+      ${score
+        ? html`<h1 class="final-score">Malos <span class="mono">${score[0]}<i>–</i>${score[1]}</span> ${match.opponent}</h1>
+          <p class="outcome">${outcome}</p>`
+        : html`<h1>Malos <span>vs</span> ${match.opponent}</h1>`}
+      <div class="row-actions" style="align-items:center">
+        ${!score ? (isLive(match) ? html`<span class="live">EN DIRECTO</span>` : started ? html`<span class="pill">Pendiente de resultado</span>` : html`<span class="pill">${formatDateTime(match.starts_at)}</span>`) : ''}
+        ${match.stream_url ? html`<a class="btn small" href="${match.stream_url}" target="_blank" rel="noopener">${score ? 'Ver la retransmisión' : 'Verlo en directo'}</a>` : ''}
+      </div>
+    </div></section>`;
+
+  // Partido aún por jugar: la predicción manda.
+  if (!started) {
+    return layout({
+      title: `Malos vs ${match.opponent}`,
+      path: '/partidos',
+      body: html`${head}<div class="narrow wide" id="votar">
+        ${flash ? alert(flash.kind, flash.message) : ''}
+        ${voteForm({ match, phase, candidates, member, myVote: myVotes.pre })}
+        ${tallyBlock('Predicción de la afición', preTally, 'antes del partido', {
+          // Mientras se puede predecir, solo la ve quien ya ha votado: así nadie se deja arrastrar por la mayoría.
+          hidden: !myVotes.pre ? (member ? 'Vota tu predicción para ver qué opina el resto de la afición.' : 'Se verá cuando empiece el partido. Los socios la ven en cuanto votan.') : null,
+        })}
+        <p><a href="/partidos">Todos los partidos</a></p>
+      </div>`,
+    });
+  }
+
+  // Partido empezado o terminado: primero lo que ha pasado, después la votación.
+  const body = html`${head}
+    <div class="narrow wide" id="votar">
+      ${flash ? alert(flash.kind, flash.message) : ''}
+      ${summary({ verdict, myResult })}
+      <section class="stack">
+        <h2>Marcador</h2>
+        ${stats.length
+          ? scoreboard(stats, {
+            mvpIds: verdict.closed ? ids(verdict.mvp) : new Set(),
+            fraudIds: verdict.closed ? ids(verdict.fraud) : new Set(),
+            bestIds: ids(verdict.kdaBest, 'player_id'),
+          })
+          : html`<p class="empty">Las estadísticas del partido se publican pronto.</p>`}
+      </section>
+      ${phase === 'post'
+        ? voteForm({ match, phase, candidates, member, myVote: myVotes.post, closes: verdict.closes })
+        : verdict.closed ? '' : html`<p class="alert info">El veredicto se abre el ${when(verdict.opens)} y dura ${VOTE_POST_HOURS} horas.</p>`}
+      ${tallyBlock('Veredicto de la afición', postTally, `después del partido`, {
+        hidden: verdict.closed ? null : `Secreto hasta el ${when(verdict.closes)}.`,
+      })}
+      ${tallyBlock('Predicción de la afición', preTally, 'antes del partido')}
+      <p><a href="/partidos">Todos los partidos</a></p>
+    </div>`;
+  return layout({ title: `Malos ${match.result || 'vs'} ${match.opponent}`, path: '/partidos', body });
+}
+
+/** Resumen del último partido para la portada. Sale aunque no haya KDA. */
+export function lastMatchCard({ match, verdict }) {
   if (!match) return '';
-  const mvp = winners(postTally.mvp).map((p) => p.nick).join(' y ');
-  const fraud = winners(postTally.fraud).map((p) => p.nick).join(' y ');
-  const best = stats.slice().sort((a, b) => (b.kills + b.assists) / Math.max(1, b.deaths) - (a.kills + a.assists) / Math.max(1, a.deaths))[0];
+  const best = verdict.kdaBest[0];
   return html`<a class="last-match" href="/partidos/${match.id}">
     <p class="eyebrow">Último partido · ${formatDate(match.starts_at, { day: 'numeric', month: 'long' })}</p>
     <p class="lm-score">Malos <b>${match.result}</b> ${match.opponent}</p>
     <dl>
-      <div><dt>MVP afición</dt><dd>${mvp || 'Votación abierta'}</dd></div>
-      <div><dt>Fraude</dt><dd>${fraud || '—'}</dd></div>
-      ${best ? html`<div><dt>Mejor KDA</dt><dd>${best.nick} · ${best.kills}/${best.deaths}/${best.assists}</dd></div>` : ''}
+      <div><dt>MVP afición</dt><dd>${verdict.closed ? names(verdict.mvp) || '—' : 'Votación abierta'}</dd></div>
+      <div><dt>Fraude</dt><dd>${verdict.closed ? names(verdict.fraud) || '—' : 'Se revela pronto'}</dd></div>
+      <div><dt>Mejor KDA</dt><dd>${best ? `${names(verdict.kdaBest.map((s) => ({ nick: s.nick })))} · ${best.kills}/${best.deaths}/${best.assists}` : 'Pendiente'}</dd></div>
     </dl>
-    <span class="lm-link">Ver marcador y votar →</span>
+    <span class="lm-link">${verdict.closed ? 'Ver marcador →' : 'Ver marcador y votar →'}</span>
   </a>`;
 }

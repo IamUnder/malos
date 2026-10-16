@@ -39,7 +39,7 @@ publicRoutes.get('/', (c) => {
     upcoming: data.upcomingMatches(4),
     season: data.seasonStats('lol'),
     oracle: data.oracleStandings().filter((r) => !r.hidden).slice(0, 5),
-    last: played ? { match: played, stats: data.matchStats(played.id), postTally: data.voteTally(played.id, 'post') } : {},
+    last: played ? { match: played, verdict: data.matchVerdict(played) } : null,
   }));
 });
 
@@ -59,8 +59,13 @@ publicRoutes.get('/partidos/:id{[0-9]+}', (c) => {
   if (!match) return c.notFound();
   const member = currentMember(c);
   const myVotes = member ? data.memberVotes(match.id, member.id) : {};
-  const myResult = match.result && myVotes.pre
-    ? (() => { const o = data.matchOutcome(match); return { ...data.scorePrediction(myVotes.pre, o), final: o.final }; })()
+  const verdict = data.matchVerdict(match);
+  const started = Date.now() >= new Date(match.starts_at).getTime();
+  const myResult = started && myVotes.pre
+    ? (() => {
+      const o = data.matchOutcome(match);
+      return { ...data.scorePrediction(myVotes.pre, o), final: o.final, hasScore: Boolean(o.score), hasStats: verdict.stats.length > 0 };
+    })()
     : null;
   return c.html(matchView.matchPage({
     match,
@@ -71,7 +76,7 @@ publicRoutes.get('/partidos/:id{[0-9]+}', (c) => {
     myVotes,
     preTally: data.voteTally(match.id, 'pre'),
     postTally: data.voteTally(match.id, 'post'),
-    stats: data.matchStats(match.id),
+    verdict,
     flash: VOTE_FLASH[c.req.query('ok')],
   }));
 });

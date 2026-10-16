@@ -2,7 +2,7 @@ import { html, raw } from 'hono/html';
 import { config } from '../config.js';
 import { formatDate, pad } from '../lib/format.js';
 import { championIcon, parseChampions } from '../lib/champions.js';
-import { POINTS, VOTE_POST_DAYS } from '../data.js';
+import { MIN_VERDICT_VOTES, POINTS, VOTE_POST_HOURS } from '../data.js';
 import { layout } from './layout.js';
 import { lastMatchCard, seasonTable } from './match.js';
 import { alert, carnet, fixtures, lastMatchBar, matchbar, news, playerPicker, roster, standings, supportBlock } from './components.js';
@@ -46,14 +46,14 @@ export function homePage({ stats, match, rank, players, posts, upcoming, season,
       ${oracleTable(oracle)}
     </div>
   </section>` : ''}
-  ${season.some((r) => r.games > 0) ? html`<section class="section">
+  ${last || season.some((r) => r.games > 0) ? html`<section class="section">
     <div class="wrap">
       <div class="section-head">
         <div class="stack" style="gap:8px"><p class="eyebrow">Temporada</p><h2>Los números</h2></div>
         <p class="muted">Se actualizan después de cada partido. El MVP y el fraude los decide la afición.</p>
       </div>
       <div class="stats-cols">
-        ${lastMatchCard(last)}
+        ${last ? lastMatchCard(last) : ''}
         ${seasonTable(season)}
       </div>
     </div>
@@ -335,18 +335,19 @@ export function oraclePage({ rows, me, member }) {
     body: html`<section class="section"><div class="wrap stack" style="gap:24px">
       <div class="section-head" style="margin-bottom:0">
         <div class="stack" style="gap:8px"><p class="eyebrow">La porra de los socios</p><h2>El Oráculo de Malos</h2></div>
-        <p class="muted">Antes de cada partido, predice el MVP, el fraude y el resultado. Cuenta el veredicto final de la afición.</p>
+        <p class="muted">Antes de cada partido, predice el MVP, el fraude y el resultado. Cuenta el veredicto de la afición, que se revela 48 horas después del partido.</p>
       </div>
       <ul class="points-legend">
         <li><b class="mono">+${POINTS.mvp}</b> aciertas el MVP</li>
         <li><b class="mono">+${POINTS.fraud}</b> aciertas el fraude</li>
         <li><b class="mono">+${POINTS.exact}</b> resultado exacto</li>
         <li><b class="mono">+${POINTS.winner}</b> solo el ganador</li>
+        <li><b class="mono">+${POINTS.kda}</b> tu MVP es el mejor KDA</li>
       </ul>
       ${me ? html`<p class="alert info">Vas <b>${me.position}.º</b> con <b>${me.points}</b> puntos${me.hidden ? ' (no sales en la lista pública: solo lo ves tú)' : ''}.</p>`
         : member ? '' : html`<p class="alert info">¿Quieres jugar? <a href="/hazte-socio">Hazte socio</a> y vota tu predicción del próximo partido.</p>`}
       ${oracleTable(rows, { meId: member?.id })}
-      <p class="muted" style="font-size:.85rem">Empate a puntos: va delante quien tiene más resultados exactos y, después, el número de socio más bajo. Los puntos de un partido son provisionales hasta que se cierra su votación final (${VOTE_POST_DAYS} días).</p>
+      <p class="muted" style="font-size:.85rem">Empate a puntos: va delante quien tiene más resultados exactos y, después, el número de socio más bajo. El MVP y el fraude puntúan cuando se revela el veredicto, ${VOTE_POST_HOURS} horas después de que se abra; si hubo menos de ${MIN_VERDICT_VOTES} votos, deciden los números (mejor y peor KDA).</p>
     </div></section>`,
   });
 }
