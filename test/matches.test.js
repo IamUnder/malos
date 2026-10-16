@@ -17,15 +17,16 @@ const DAY = 86400e3;
 
 const H = 3600e3;
 
-test('predicción hasta el inicio; el veredicto se abre solo a las 3 h y dura 48 h', () => {
+test('predicción hasta el inicio; el veredicto se abre solo a las 3 h y dura 24 h', () => {
   const start = Date.now() + DAY;
   const id = data.saveMatch({ startsAt: new Date(start), opponent: 'A', game: 'lol' });
   const m = data.getMatch(id);
   assert.equal(data.votePhase(m), 'pre');
   assert.equal(data.votePhase(m, start + 1 * H), null, 'en juego: cerrada');
   assert.equal(data.votePhase(m, start + 4 * H), 'post', 'se abre sola sin resultado');
-  assert.equal(data.votePhase(m, start + 52 * H), null, 'cerrada tras 48 h');
-  assert.equal(data.verdictClosed(m, start + 52 * H), true);
+  assert.equal(data.votePhase(m, start + 26 * H), 'post', 'sigue abierta a las 23 h de abrirse');
+  assert.equal(data.votePhase(m, start + 28 * H), null, 'cerrada tras 24 h');
+  assert.equal(data.verdictClosed(m, start + 28 * H), true);
 });
 
 test('poner el resultado antes de las 3 h adelanta el veredicto', () => {

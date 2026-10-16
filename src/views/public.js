@@ -335,7 +335,7 @@ export function oraclePage({ rows, me, member }) {
     body: html`<section class="section"><div class="wrap stack" style="gap:24px">
       <div class="section-head" style="margin-bottom:0">
         <div class="stack" style="gap:8px"><p class="eyebrow">La porra de los socios</p><h2>El Oráculo de Malos</h2></div>
-        <p class="muted">Antes de cada partido, predice el MVP, el fraude y el resultado. Cuenta el veredicto de la afición, que se revela 48 horas después del partido.</p>
+        <p class="muted">Antes de cada partido, predice el MVP, el fraude y el resultado. Cuenta el veredicto de la afición, que se revela ${VOTE_POST_HOURS} horas después de abrirse.</p>
       </div>
       <ul class="points-legend">
         <li><b class="mono">+${POINTS.mvp}</b> aciertas el MVP</li>

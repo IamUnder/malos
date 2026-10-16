@@ -91,7 +91,7 @@ export const matchesMissingStats = () => db.prepare(`
 // Se puede cambiar el voto mientras la votación está abierta. MVP y fraude no pueden ser el mismo jugador.
 
 export const VOTE_POST_DELAY_H = 3;
-export const VOTE_POST_HOURS = 48;
+export const VOTE_POST_HOURS = 24;
 /** Con menos votos que esto, el veredicto lo deciden los números (mejor y peor KDA). */
 export const MIN_VERDICT_VOTES = 3;
 
