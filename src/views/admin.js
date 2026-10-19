@@ -6,7 +6,7 @@ import { layout } from './layout.js';
 import { alert, avatar, roleLabel, standings } from './components.js';
 import { championName, parseChampions } from '../lib/champions.js';
 
-const page = (path, title, body) => layout({ title: `Admin · ${title}`, path, admin: true, scripts: ['/js/admin.js'], body: html`<section class="section"><div class="wrap stack" style="gap:28px">${body}</div></section>` });
+const page = (path, title, body) => layout({ title: `Admin · ${title}`, path, admin: true, scripts: ['/js/admin.js', ...(path === '/admin/avisos' ? ['/js/editor.js'] : [])], body: html`<section class="section"><div class="wrap stack" style="gap:28px">${body}</div></section>` });
 
 const flashBox = (flash) => (flash ? alert(flash.kind, flash.message) : '');
 
@@ -50,17 +50,39 @@ export function dashboardPage({ stats, rank, recent, missing = [], flash }) {
     </div>`);
 }
 
-export function noticesPage({ posts, stats, flash }) {
+const TOOLBAR = [
+  ['bold', 'B', 'Negrita (Ctrl+B)'], ['italic', 'I', 'Cursiva (Ctrl+I)'], ['h2', 'Título', 'Título de sección'],
+  ['h3', 'Sub', 'Subtítulo'], ['ul', '• Lista', 'Lista'], ['ol', '1. Lista', 'Lista numerada'], ['quote', '“ Cita', 'Cita'],
+  ['link', 'Enlace', 'Enlace (Ctrl+K)'], ['image', 'Imagen', 'Subir imagen'], ['hr', '—', 'Separador'],
+];
+
+export function noticesPage({ posts, stats, editing, flash }) {
+  const p = editing || {};
   return page('/admin/avisos', 'Avisos', html`
     <h2>Noticias y avisos</h2>
     ${flashBox(flash)}
     <form class="panel form" method="post" action="/admin/avisos">
-      <div class="field"><label for="title">Título</label><input id="title" name="title" type="text" required maxlength="80" placeholder="Hoy jugamos contra Los Pollos a las 20:00"></div>
-      <div class="field"><label for="body">Texto de la noticia</label><textarea id="body" name="body" required maxlength="4000"></textarea></div>
-      <label class="check"><input type="checkbox" name="push" ${config.push.enabled ? 'checked' : 'disabled'}>
+      ${p.id ? html`<input type="hidden" name="id" value="${p.id}"><p class="alert info">Editando «${p.title}». Al guardar no se vuelve a mandar el aviso.</p>` : ''}
+      <div class="field"><label for="title">Título</label><input id="title" name="title" type="text" required maxlength="80" placeholder="Hoy jugamos contra Los Pollos a las 20:00" value="${p.title || ''}"></div>
+      <div class="field editor" data-editor>
+        <label for="body">Texto de la noticia</label>
+        <div class="editor-toolbar" role="toolbar" aria-label="Formato">
+          ${TOOLBAR.map(([action, label, title]) => html`<button type="button" class="tool tool-${action}" data-action="${action}" title="${title}">${label}</button>`)}
+          <input type="file" accept="image/*" multiple hidden>
+        </div>
+        <div class="editor-panes">
+          <textarea id="body" name="body" required maxlength="20000" placeholder="Escribe aquí. Puedes arrastrar o pegar imágenes.">${p.body || ''}</textarea>
+          <div class="editor-preview prose news-body" aria-live="polite"></div>
+        </div>
+        <p class="editor-status hint" aria-live="polite">Arrastra o pega imágenes en el texto, o usa el botón «Imagen». Se reducen solas antes de subirlas. La primera imagen hace de portada.</p>
+      </div>
+      ${p.id ? '' : html`<label class="check"><input type="checkbox" name="push" ${config.push.enabled ? 'checked' : 'disabled'}>
         <span>Mandar también como aviso al móvil a los <b>${stats.withPush}</b> socios con avisos activados.
-        <span class="hint">El aviso muestra el título y el principio del texto. Úsalo solo para lo importante: si se abusa, la gente los desactiva.</span></span></label>
-      <button class="btn" type="submit">Publicar</button>
+        <span class="hint">El aviso muestra el título, el principio del texto y, en Android, la primera imagen. Úsalo solo para lo importante: si se abusa, la gente los desactiva.</span></span></label>`}
+      <div class="row-actions">
+        <button class="btn" type="submit">${p.id ? 'Guardar cambios' : 'Publicar'}</button>
+        ${p.id ? html`<a class="btn ghost" href="/admin/avisos">Cancelar</a>` : ''}
+      </div>
     </form>
     <div class="table-wrap"><table>
       <thead><tr><th>Fecha</th><th>Título</th><th>Aviso</th><th></th></tr></thead>
@@ -68,7 +90,11 @@ export function noticesPage({ posts, stats, flash }) {
         <td class="num">${formatDate(p.created_at, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
         <td>${p.title}</td>
         <td>${p.pushed_to ? html`<span class="pill ok">${p.pushed_to} disp.</span>` : html`<span class="pill">No</span>`}</td>
-        <td><form method="post" action="/admin/avisos/${p.id}/borrar" data-confirm="¿Borrar esta noticia?"><button class="btn small ghost" type="submit">Borrar</button></form></td>
+        <td><div class="row-actions">
+          <a class="btn small ghost" href="/admin/avisos?editar=${p.id}">Editar</a>
+          <a class="btn small ghost" href="/noticias/${p.id}">Ver</a>
+          <form method="post" action="/admin/avisos/${p.id}/borrar" data-confirm="¿Borrar esta noticia?"><button class="btn small ghost" type="submit">Borrar</button></form>
+        </div></td>
       </tr>`)}</tbody>
     </table></div>`);
 }

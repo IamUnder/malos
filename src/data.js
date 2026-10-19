@@ -332,6 +332,8 @@ export const listPosts = (limit = 10) => db.prepare('SELECT * FROM posts ORDER B
 export const getPost = (id) => db.prepare('SELECT * FROM posts WHERE id = ?').get(id);
 export const deletePost = (id) => db.prepare('DELETE FROM posts WHERE id = ?').run(id);
 
+export const updatePost = ({ id, title, body }) => db.prepare('UPDATE posts SET title = ?, body = ? WHERE id = ?').run(title, body, id);
+
 export function createPost({ title, body }) {
   const { lastInsertRowid } = db.prepare('INSERT INTO posts (title, body, created_at) VALUES (?,?,?)').run(title, body, now());
   return getPost(lastInsertRowid);

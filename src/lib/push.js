@@ -12,9 +12,9 @@ if (config.push.enabled) {
  * Manda un aviso a todos los socios con avisos activados.
  * Las suscripciones que ya no existen (el usuario desinstaló o quitó el permiso) se borran solas.
  */
-export async function broadcast({ title, body, url = '/' }) {
+export async function broadcast({ title, body, url = '/', image }) {
   if (!config.push.enabled) return { sent: 0, failed: 0 };
-  const payload = JSON.stringify({ title, body, url });
+  const payload = JSON.stringify({ title, body, url, image });
   const subscriptions = allSubscriptions();
   let sent = 0;
   let failed = 0;

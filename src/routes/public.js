@@ -6,6 +6,7 @@ import { tooMany, turnstileOk } from '../lib/guard.js';
 import { memberCheckCode, memberCheckPath, safeEqual } from '../lib/auth.js';
 import { currentMember, forgetMember, rememberMember } from '../lib/member-session.js';
 import * as gwallet from '../lib/google-wallet.js';
+import { readUpload } from '../lib/uploads.js';
 import * as views from '../views/public.js';
 import * as matchView from '../views/match.js';
 import { privacy, legalNotice } from '../views/legal.js';
@@ -112,6 +113,21 @@ publicRoutes.get('/oraculo', (c) => {
 });
 
 publicRoutes.get('/noticias', (c) => c.html(views.newsPage({ posts: data.listPosts(50) })));
+publicRoutes.get('/noticias/:id{[0-9]+}', (c) => {
+  const post = data.getPost(Number(c.req.param('id')));
+  if (!post) return c.notFound();
+  return c.html(views.postPage({ post, more: data.listPosts(4).filter((p) => p.id !== post.id).slice(0, 3) }));
+});
+
+// Imágenes de las noticias (subidas desde el panel).
+publicRoutes.get('/uploads/:name', (c) => {
+  const file = readUpload(c.req.param('name'));
+  if (!file) return c.notFound();
+  c.header('Content-Type', file.type);
+  c.header('Cache-Control', 'public, max-age=31536000, immutable');
+  c.header('X-Content-Type-Options', 'nosniff');
+  return c.body(file.body);
+});
 publicRoutes.get('/privacidad', (c) => c.html(views.legalPage({ title: 'Privacidad', path: '/privacidad', content: privacy })));
 publicRoutes.get('/aviso-legal', (c) => c.html(views.legalPage({ title: 'Aviso legal', path: '/aviso-legal', content: legalNotice })));
 

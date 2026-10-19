@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { GAMES } from '../data.js';
 import { formatDate, formatDateTime, pad } from '../lib/format.js';
 import { championIcon, championName, parseChampions } from '../lib/champions.js';
+import { excerpt, firstImage } from '../lib/markdown.js';
 
 const ROLE_LABELS = { top: 'Top', jungla: 'Jungla', mid: 'Mid', adc: 'ADC', support: 'Support', suplente: 'Suplente', coach: 'Coach' };
 export const roleLabel = (role) => ROLE_LABELS[role] || role;
@@ -119,14 +120,22 @@ export function fixtures(matches) {
   </ul>`;
 }
 
+/** Lista de noticias en tarjetas: portada (primera imagen), fecha, título y extracto. */
 export function news(posts) {
   if (posts.length === 0) return html`<p class="empty">Todavía no hay noticias.</p>`;
   return html`<div class="news">
-    ${posts.map((p) => html`<article id="n${p.id}">
-      <p class="eyebrow">${formatDate(p.created_at)}</p>
-      <h3>${p.title}</h3>
-      <p class="body">${p.body}</p>
-    </article>`)}
+    ${posts.map((p) => {
+      const cover = firstImage(p.body);
+      return html`<article class="news-card${cover ? ' has-cover' : ''}" id="n${p.id}">
+        ${cover ? html`<a class="news-cover" href="/noticias/${p.id}" tabindex="-1" aria-hidden="true"><img src="${cover}" alt="" loading="lazy"></a>` : ''}
+        <div class="stack" style="gap:6px">
+          <p class="eyebrow">${formatDate(p.created_at)}</p>
+          <h3><a href="/noticias/${p.id}">${p.title}</a></h3>
+          <p class="body">${excerpt(p.body, 200)}</p>
+          <a class="news-more" href="/noticias/${p.id}">Leer más →</a>
+        </div>
+      </article>`;
+    })}
   </div>`;
 }
 

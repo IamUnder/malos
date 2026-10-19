@@ -2,6 +2,7 @@ import { html, raw } from 'hono/html';
 import { config } from '../config.js';
 import { formatDate, pad } from '../lib/format.js';
 import { championIcon, parseChampions } from '../lib/champions.js';
+import { renderMarkdown, excerpt, firstImage } from '../lib/markdown.js';
 import { MIN_VERDICT_VOTES, POINTS, VOTE_POST_HOURS } from '../data.js';
 import { layout } from './layout.js';
 import { lastMatchCard, seasonTable } from './match.js';
@@ -350,4 +351,15 @@ export function oraclePage({ rows, me, member }) {
       <p class="muted" style="font-size:.85rem">Empate a puntos: va delante quien tiene más resultados exactos y, después, el número de socio más bajo. El MVP y el fraude puntúan cuando se revela el veredicto, ${VOTE_POST_HOURS} horas después de que se abra; si hubo menos de ${MIN_VERDICT_VOTES} votos, deciden los números (mejor y peor KDA).</p>
     </div></section>`,
   });
+}
+
+export function postPage({ post, more }) {
+  const cover = firstImage(post.body);
+  const body = html`<article class="narrow wide post">
+    <p class="eyebrow">${formatDate(post.created_at)} · <a href="/noticias">Noticias</a></p>
+    <h1 class="post-title">${post.title}</h1>
+    <div class="prose news-body">${raw(renderMarkdown(post.body))}</div>
+    ${more.length ? html`<section class="stack" style="margin-top:24px"><h2>Más noticias</h2>${news(more)}</section>` : ''}
+  </article>`;
+  return layout({ title: post.title, description: excerpt(post.body, 160), path: `/noticias/${post.id}`, body, image: cover });
 }

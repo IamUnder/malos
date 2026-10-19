@@ -403,3 +403,43 @@ table.season td, table.scoreboard td { white-space: nowrap; }
 .badge.kda { background: var(--azul-l); color: #fff; }
 table.scoreboard tr.row-mvp td { background: #fdf3d2; }
 table.scoreboard tr.row-fraud td { background: #fdecec; }
+
+/* ---------- Editor de noticias (panel) ---------- */
+.editor-toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 2px solid var(--tinta); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: var(--hueso); }
+.tool { padding: 6px 10px; border: 1px solid var(--linea); border-radius: 4px; background: #fff; color: var(--tinta); font: 600 .85rem/1 var(--body); cursor: pointer; }
+.tool:hover { border-color: var(--tinta); }
+.tool-bold { font-weight: 800; }
+.tool-italic { font-style: italic; }
+.tool-image { background: var(--azul-l); border-color: var(--azul-l); color: #fff; }
+.editor-panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 2px solid var(--tinta); border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
+.editor-panes textarea { min-height: 380px; border: 0; border-radius: 0; border-right: 2px dashed var(--linea); font: 400 .95rem/1.6 var(--mono); resize: vertical; }
+.editor-panes textarea:focus { outline: none; box-shadow: inset 0 0 0 3px var(--azul-l); }
+.editor-preview { padding: 14px 18px; background: #fff; max-height: 600px; overflow: auto; }
+.editor.dragging .editor-panes { box-shadow: 0 0 0 4px var(--azul-l); }
+.editor-status.error { color: var(--rojo-l); font-weight: 600; }
+@media (max-width: 800px) {
+  .editor-panes { grid-template-columns: 1fr; }
+  .editor-panes textarea { border-right: 0; border-bottom: 2px dashed var(--linea); min-height: 260px; }
+}
+
+/* ---------- Texto de las noticias (página, vista previa) ---------- */
+.news-body { display: grid; gap: 14px; max-width: 70ch; }
+.news-body h3 { font-size: 1.9rem; margin-top: 10px; }
+.news-body h4 { font-size: 1.4rem; margin-top: 6px; }
+.news-body ul, .news-body ol { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; }
+.news-body blockquote { margin: 0; padding: 10px 16px; border-left: 4px solid var(--mostaza); background: var(--hueso); font-style: italic; }
+.news-body hr { border: 0; border-top: 2px dashed var(--linea); width: 100%; margin: 6px 0; }
+.news-body figure { margin: 4px 0; display: grid; gap: 6px; }
+.news-body img { max-width: 100%; height: auto; border-radius: var(--radius); border: 2px solid var(--tinta); }
+.news-body figcaption { font-size: .85rem; color: var(--gris); text-align: center; }
+.news-body a { color: var(--azul-l); font-weight: 600; }
+.post-title { font-size: clamp(2.4rem, 6vw, 4rem); margin: 6px 0 18px; }
+
+/* ---------- Tarjetas de noticias ---------- */
+.news-card { display: grid; gap: 14px; }
+.news-card.has-cover { grid-template-columns: minmax(0, 200px) minmax(0, 1fr); align-items: start; }
+.news-cover img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius); border: 2px solid var(--tinta); }
+.news-card h3 a { text-decoration: none; }
+.news-card h3 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.news-more { font-weight: 700; font-size: .9rem; }
+@media (max-width: 560px) { .news-card.has-cover { grid-template-columns: 1fr; } }

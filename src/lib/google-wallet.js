@@ -18,7 +18,11 @@ const SCOPE = 'https://www.googleapis.com/auth/wallet_object.issuer';
 
 const { issuerId, keyFile } = config.googleWallet;
 const key = issuerId && existsSync(keyFile) ? JSON.parse(readFileSync(keyFile, 'utf8')) : null;
-export const enabled = Boolean(key?.private_key && key?.client_email);
+// Solo en producción: la clase y los avisos son los reales, y un servidor de desarrollo con la clave
+// a mano los pisaría (próximo partido de ejemplo, avisos de prueba a los socios). Para probar en local
+// a propósito: GOOGLE_WALLET_ALLOW_DEV=true.
+const allowed = config.isProd || process.env.GOOGLE_WALLET_ALLOW_DEV === 'true';
+export const enabled = allowed && Boolean(key?.private_key && key?.client_email);
 
 const CLASS_ID = `${issuerId}.malos_socio`;
 const objectId = (member) => `${issuerId}.socio_${member.id.replace(/[^\w.-]/g, '_')}`;

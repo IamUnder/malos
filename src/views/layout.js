@@ -11,7 +11,7 @@ const NAV = [
   ['/mi-tarjeta', 'Mi tarjeta'],
 ];
 
-export function layout({ title, description, path = '/', body, admin = false, scripts = [], manifest = '/manifest.webmanifest' }) {
+export function layout({ title, description, path = '/', body, admin = false, scripts = [], manifest = '/manifest.webmanifest', image = null }) {
   const fullTitle = title ? `${title} · Malos` : 'Malos · Club de fans';
   return html`<!doctype html>
 <html lang="es">
@@ -27,7 +27,7 @@ export function layout({ title, description, path = '/', body, admin = false, sc
   <link rel="preload" href="/fonts/big-shoulders.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/css/site.css">
   <meta property="og:title" content="${fullTitle}">
-  <meta property="og:image" content="${config.siteUrl}/img/og.png">
+  <meta property="og:image" content="${config.siteUrl}${image || '/img/og.png'}">
   <meta property="og:url" content="${config.siteUrl}${path}">
   ${admin || config.testMode ? html`<meta name="robots" content="noindex, nofollow">` : ''}
 </head>

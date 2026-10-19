@@ -6,6 +6,7 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: '/img/icon-192.png',
     badge: '/img/badge-96.png',
+    image: data.image || undefined, // Android muestra la foto en grande
     data: { url: data.url || '/' },
     lang: 'es',
   }));
